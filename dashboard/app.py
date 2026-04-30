@@ -237,6 +237,60 @@ with tab1:
             prob = result["churn_probability"]
             st.progress(prob)
 
+            # SHAP Explanation
+            st.subheader("🔍 Why This Prediction?")
+            try:
+                explain_response = requests.post(
+                    f"{API_URL}/predict/explain", json=payload
+                )
+                if explain_response.status_code == 200:
+                    explanation = explain_response.json()["explanation"]
+
+                    with st.expander("View SHAP Explanation", expanded=True):
+                        st.markdown("**Features pushing toward churn:**")
+                        if explanation["top_positive"]:
+                            for feat in explanation["top_positive"]:
+                                st.markdown(
+                                    f"- ↑ **{feat['feature']}**: {feat['value']:.2f} "
+                                    f"(contribution: +{feat['contribution']:.4f})"
+                                )
+                        else:
+                            st.markdown("_No strong churn indicators_")
+
+                        st.markdown("**Features pushing against churn:**")
+                        if explanation["top_negative"]:
+                            for feat in explanation["top_negative"]:
+                                st.markdown(
+                                    f"- ↓ **{feat['feature']}**: {feat['value']:.2f} "
+                                    f"(contribution: {feat['contribution']:.4f})"
+                                )
+                        else:
+                            st.markdown("_No strong retention indicators_")
+
+                        # Waterfall chart placeholder
+                        st.markdown("---")
+                        st.markdown("**SHAP Value Breakdown**")
+                        chart_data = {
+                            "Feature": [
+                                f["feature"] for f in explanation["shap_values"]
+                            ],
+                            "Contribution": [
+                                f["contribution"] for f in explanation["shap_values"]
+                            ],
+                        }
+                        st.bar_chart(
+                            chart_data,
+                            x="Feature",
+                            y="Contribution",
+                            color="Contribution",
+                        )
+                else:
+                    st.info(
+                        "SHAP explanations not available. Run training to generate the explainer."
+                    )
+            except Exception as e:
+                st.warning(f"Could not load explanation: {e}")
+
         except Exception as e:
             st.error(f"Error making prediction: {e}")
 

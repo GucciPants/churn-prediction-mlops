@@ -25,6 +25,7 @@ from src.config import (
     RANDOM_STATE,
     RAW_DATA_PATH,
 )
+from src.explainer import create_explainer, save_explainer
 from src.features import build_feature_pipeline
 
 logger = logging.getLogger(__name__)
@@ -115,10 +116,17 @@ def main():
 
     # Train models
     results = {}
+    explainers = {}
     for model_name in MODELS.keys():
         model, metrics = train_model(model_name, X_train, y_train, X_test, y_test)
         save_model(model, model_name)
         results[model_name] = metrics
+
+        # Create and save SHAP explainer
+        explainer = create_explainer(model, model_name)
+        explainers[model_name] = explainer
+        explainer_path = MODELS_DIR / f"{model_name}_explainer.pkl"
+        save_explainer(explainer, explainer_path)
 
     # Print summary
     logger.info("Training completed. Results:")

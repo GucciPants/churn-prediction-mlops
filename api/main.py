@@ -2,6 +2,7 @@
 
 import io
 import pickle
+import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Dict, List
@@ -11,19 +12,24 @@ from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+sys.path.append(str(Path(__file__).resolve().parent.parent))
+from src.explainer import explain_prediction, load_explainer
+
 # Load model and scaler
 MODELS_DIR = Path(__file__).resolve().parent.parent / "models"
 
 # Global artifacts
 model = None
 scaler = None
+explainer = None
 
 
 def load_artifacts():
-    """Load trained model and scaler."""
-    global model, scaler
+    """Load trained model, scaler, and SHAP explainer."""
+    global model, scaler, explainer
     model_path = MODELS_DIR / "random_forest.pkl"
     scaler_path = MODELS_DIR / "scaler.pkl"
+    explainer_path = MODELS_DIR / "random_forest_explainer.pkl"
 
     if not model_path.exists():
         print(
@@ -40,6 +46,12 @@ def load_artifacts():
         model = pickle.load(f)
     with open(scaler_path, "rb") as f:
         scaler = pickle.load(f)
+
+    explainer = load_explainer(explainer_path)
+    if explainer is None:
+        print(
+            f"WARNING: SHAP explainer not found at {explainer_path}. Explanations will not work."
+        )
 
 
 @asynccontextmanager
@@ -170,6 +182,34 @@ async def predict(customer: CustomerData):
             churn_prediction=int(pred),
             churn_label="Yes" if pred == 1 else "No",
         )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/predict/explain", tags=["Predictions"])
+async def explain(customer: CustomerData):
+    """Explain a churn prediction with SHAP values."""
+    if model is None:
+        raise HTTPException(status_code=500, detail="Model not loaded")
+    if explainer is None:
+        raise HTTPException(status_code=500, detail="SHAP explainer not loaded")
+
+    try:
+        input_df = preprocess_input(customer.dict())
+        explanation = explain_prediction(explainer, input_df)
+
+        # Also get the prediction
+        prob = model.predict_proba(input_df)[0, 1]
+        pred = model.predict(input_df)[0]
+
+        return {
+            "prediction": {
+                "churn_probability": round(float(prob), 4),
+                "churn_prediction": int(pred),
+                "churn_label": "Yes" if pred == 1 else "No",
+            },
+            "explanation": explanation,
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
