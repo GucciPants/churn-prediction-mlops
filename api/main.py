@@ -1,11 +1,13 @@
 """FastAPI backend for churn prediction."""
 
+import io
 import pickle
 from pathlib import Path
 from typing import Any, Dict, List
 
 import pandas as pd
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 # Load model and scaler
@@ -191,6 +193,68 @@ async def predict_batch(batch: BatchPredictionInput):
             )
 
         return BatchPredictionResponse(predictions=predictions)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/predict/batch/csv", tags=["Predictions"])
+async def predict_batch_csv(file: UploadFile = File(...)):
+    """Predict churn for multiple customers from CSV file."""
+    if model is None:
+        raise HTTPException(status_code=500, detail="Model not loaded")
+
+    try:
+        # Read CSV
+        contents = await file.read()
+        df = pd.read_csv(io.StringIO(contents.decode("utf-8")))
+
+        # Validate required columns
+        required_cols = [
+            "gender", "SeniorCitizen", "Partner", "Dependents", "tenure",
+            "PhoneService", "MultipleLines", "InternetService", "OnlineSecurity",
+            "OnlineBackup", "DeviceProtection", "TechSupport", "StreamingTV",
+            "StreamingMovies", "Contract", "PaperlessBilling", "PaymentMethod",
+            "MonthlyCharges", "TotalCharges",
+        ]
+        missing_cols = [col for col in required_cols if col not in df.columns]
+        if missing_cols:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Missing required columns: {', '.join(missing_cols)}"
+            )
+
+        # Process each row
+        results = []
+        for _, row in df.iterrows():
+            customer_data = row.to_dict()
+            input_df = preprocess_input(customer_data)
+            prob = model.predict_proba(input_df)[0, 1]
+            pred = model.predict(input_df)[0]
+
+            results.append({
+                "churn_probability": round(float(prob), 4),
+                "churn_prediction": int(pred),
+                "churn_label": "Yes" if pred == 1 else "No",
+                "risk_level": "High" if prob > 0.5 else "Medium" if prob > 0.3 else "Low",
+            })
+
+        # Add results to original dataframe
+        results_df = pd.DataFrame(results)
+        output_df = pd.concat([df.reset_index(drop=True), results_df], axis=1)
+
+        # Convert to CSV
+        output = io.StringIO()
+        output_df.to_csv(output, index=False)
+        output.seek(0)
+
+        return StreamingResponse(
+            io.BytesIO(output.getvalue().encode()),
+            media_type="text/csv",
+            headers={"Content-Disposition": "attachment; filename=predictions.csv"}
+        )
+
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
