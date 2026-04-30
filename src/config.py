@@ -1,4 +1,5 @@
 """Project configuration and constants."""
+import os
 from pathlib import Path
 
 # Project paths
@@ -7,7 +8,7 @@ DATA_DIR = PROJECT_ROOT / "data"
 RAW_DATA_PATH = DATA_DIR / "raw" / "WA_Fn-UseC_-Telco-Customer-Churn.csv"
 PROCESSED_DATA_DIR = DATA_DIR / "processed"
 MODELS_DIR = PROJECT_ROOT / "models"
-MLFLOW_TRACKING_URI = "http://localhost:5000"
+MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000")
 
 # Random seed for reproducibility
 RANDOM_STATE = 42

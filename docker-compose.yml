@@ -7,10 +7,32 @@ services:
       - "8000:8000"
     volumes:
       - ./models:/app/models
+      - ./data:/app/data
     environment:
       - PYTHONPATH=/app
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+    depends_on:
+      - mlflow
     networks:
       - churn-net
+
+  train:
+    build: .
+    volumes:
+      - ./models:/app/models
+      - ./data:/app/data
+      - ./mlruns:/app/mlruns
+    environment:
+      - PYTHONPATH=/app
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+    depends_on:
+      - mlflow
+    networks:
+      - churn-net
+    command: >
+      bash -c "python src/train.py"
+    profiles:
+      - training
 
   dashboard:
     build:
