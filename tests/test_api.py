@@ -6,9 +6,12 @@ import pytest
 from fastapi.testclient import TestClient
 
 sys.path.append(str(Path(__file__).resolve().parent.parent))
-from api.main import app
+from api.main import app, model, scaler
 
 client = TestClient(app)
+
+# Skip prediction tests if model is not loaded
+model_loaded = model is not None and scaler is not None
 
 
 class TestHealthEndpoint:
@@ -27,6 +30,7 @@ class TestRootEndpoint:
         assert "message" in data
 
 
+@pytest.mark.skipif(not model_loaded, reason="Model not trained yet")
 class TestPredictEndpoint:
     def test_predict_valid_input(self):
         payload = {

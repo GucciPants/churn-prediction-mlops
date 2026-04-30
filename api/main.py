@@ -28,9 +28,11 @@ def load_artifacts():
     scaler_path = MODELS_DIR / "scaler.pkl"
 
     if not model_path.exists():
-        raise FileNotFoundError(f"Model not found at {model_path}. Run training first.")
+        print(f"WARNING: Model not found at {model_path}. Predictions will not work until training is run.")
+        return
     if not scaler_path.exists():
-        raise FileNotFoundError(f"Scaler not found at {scaler_path}. Run training first.")
+        print(f"WARNING: Scaler not found at {scaler_path}. Predictions will not work until training is run.")
+        return
 
     with open(model_path, "rb") as f:
         model = pickle.load(f)

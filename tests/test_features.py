@@ -11,13 +11,26 @@ from src.features import clean_data, encode_binary_features, encode_target, load
 
 class TestLoadData:
     def test_load_existing_file(self):
-        df = load_data(Path("data/raw/WA_Fn-UseC_-Telco-Customer-Churn.csv"))
+        # Create a temporary CSV file for testing
+        test_data = pd.DataFrame({
+            "customerID": ["1", "2"],
+            "tenure": [1, 2],
+            "Churn": ["Yes", "No"]
+        })
+        test_path = Path("data/raw/test_temp.csv")
+        test_path.parent.mkdir(parents=True, exist_ok=True)
+        test_data.to_csv(test_path, index=False)
+        
+        df = load_data(test_path)
         assert isinstance(df, pd.DataFrame)
-        assert len(df) > 0
+        assert len(df) == 2
+        
+        # Cleanup
+        test_path.unlink()
 
     def test_load_nonexistent_file(self):
         with pytest.raises(FileNotFoundError):
-            load_data(Path("data/raw/nonexistent.csv"))
+            load_data(Path("data/raw/nonexistent_test.csv"))
 
 
 class TestCleanData:
