@@ -5,12 +5,11 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
-from httpx import ASGITransport
 
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 from api.main import app, model, scaler
 
-client = TestClient(transport=ASGITransport(app=app))
+client = TestClient(app)
 
 # Skip prediction tests if model is not loaded
 model_loaded = model is not None and scaler is not None
