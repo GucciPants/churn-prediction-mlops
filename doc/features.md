@@ -207,12 +207,152 @@ Returns churn rates grouped by different dimensions.
 
 ---
 
+---
+
+## Feature 4: ⚖️ Model Comparison Dashboard
+
+### Purpose
+Compare predictions between RandomForest and XGBoost models side-by-side to assess model agreement and confidence.
+
+### Implementation
+
+**API Endpoint:** `POST /predict/compare`
+
+**Returns:**
+```json
+{
+  "random_forest": {
+    "churn_probability": 0.7266,
+    "churn_prediction": 1,
+    "churn_label": "Yes"
+  },
+  "xgboost": {
+    "churn_probability": 0.6891,
+    "churn_prediction": 1,
+    "churn_label": "Yes"
+  },
+  "comparison": {
+    "models_agree": true,
+    "confidence_difference": 0.0375,
+    "average_probability": 0.7079
+  }
+}
+```
+
+**Dashboard:** "⚖️ Model Comparison" tab
+- Input form (same as Single Prediction)
+- Side-by-side results display
+- Probability comparison bar chart
+- Agreement indicator (green/red)
+
+---
+
+## Feature 5: 🚨 Alerts System
+
+### Purpose
+Monitor customer base for high churn risk and trigger alerts when thresholds are exceeded.
+
+### Implementation
+
+**API Endpoint:** `GET /alerts/check?threshold=0.5`
+
+**Returns:**
+```json
+{
+  "threshold": 0.5,
+  "total_customers": 7043,
+  "high_risk_count": 1867,
+  "high_risk_percentage": 26.51,
+  "top_risk_customers": [...],
+  "alert_triggered": true
+}
+```
+
+**Features:**
+- Configurable probability threshold (default: 0.5)
+- Returns top 10 highest risk customers
+- Shows percentage of at-risk customer base
+- Dashboard integration in Model Comparison tab
+
+---
+
+## Feature 6: 📊 Data Drift Detection
+
+### Purpose
+Monitor input data distribution changes over time to detect when retraining might be needed.
+
+### Implementation
+
+**API Endpoint:** `GET /monitoring/drift`
+
+**Methodology:**
+- Compares current dataset statistics against known baseline
+- Tracks: tenure, MonthlyCharges, TotalCharges
+- Calculates drift score: |current_mean - baseline_mean| / baseline_std
+- Drift detected if score > 0.5
+
+**Returns:**
+```json
+{
+  "drift_detected": false,
+  "drift_metrics": {
+    "tenure": {
+      "current_mean": 32.37,
+      "baseline_mean": 32.37,
+      "drift_score": 0.0,
+      "drift_detected": false
+    }
+  }
+}
+```
+
+**Dashboard Integration:**
+- Real-time drift check button
+- Visual indicators (✅/🚨) per feature
+- Current vs baseline comparison display
+
+---
+
+## Updated Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Complete Architecture                         │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  API Endpoints                                                   │
+│  ├── POST /predict (single prediction)                          │
+│  ├── POST /predict/explain (SHAP explanations)                  │
+│  ├── POST /predict/compare (RF vs XGBoost)                      │
+│  ├── POST /predict/batch/csv (batch processing)                 │
+│  ├── GET /predict/customer/{id} (customer details)              │
+│  ├── GET /analytics/feature-importance                          │
+│  ├── GET /analytics/churn-profile                               │
+│  ├── GET /alerts/check (high risk monitoring)                   │
+│  └── GET /monitoring/drift (data drift detection)               │
+│                                                                  │
+│  Dashboard Tabs                                                  │
+│  ├── 🔮 Single Prediction (+ SHAP)                              │
+│  ├── 📁 Batch Prediction                                        │
+│  ├── 👤 Customer Details                                        │
+│  ├── 📈 Analytics (Feature importance + profiles)               │
+│  └── ⚖️ Model Comparison (+ Alerts & Drift)                    │
+│                                                                  │
+│  CI/CD Workflows                                                 │
+│  ├── ci.yml (test + build on push)                              │
+│  └── retrain.yml (weekly automated retraining)                  │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
 ## Future Enhancements
 
-Potential next features to consider:
+Potential next features:
 
-1. **Model Comparison Dashboard** - Side-by-side RandomForest vs XGBoost performance
-2. **Prediction History** - Track predictions over time in a database
-3. **A/B Testing Framework** - Compare model versions in production
-4. **Data Drift Detection** - Monitor for changes in input data distribution
-5. **Email/Slack Alerts** - Notifications when churn rate exceeds thresholds
+1. **Prediction History Database** - Store all predictions over time
+2. **A/B Testing Framework** - Compare model versions in production
+3. **Email/Slack Webhooks** - Automated notifications for alerts
+4. **Advanced Drift Detection** - Statistical tests (KS-test, PSI)
+5. **Model Performance Monitoring** - Track accuracy degradation over time
