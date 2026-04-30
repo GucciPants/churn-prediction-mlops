@@ -128,11 +128,11 @@ def preprocess_input(data: Dict[str, Any]) -> pd.DataFrame:
     df = pd.get_dummies(df, columns=cat_cols, drop_first=True)
 
     # Align columns with training data
-    expected_cols = set(model.feature_names_in_)
+    expected_cols = list(model.feature_names_in_)
     for col in expected_cols:
         if col not in df.columns:
             df[col] = 0
-    df = df[list(expected_cols)]
+    df = df[expected_cols]
 
     # Scale numeric
     numeric_cols = ["tenure", "MonthlyCharges", "TotalCharges"]
