@@ -20,13 +20,16 @@ MODELS_DIR = Path(__file__).resolve().parent.parent / "models"
 
 # Global artifacts
 model = None
+model_xgb = None
 scaler = None
 explainer = None
 
 
 def load_artifacts():
-    """Load trained model, scaler, and SHAP explainer."""
-    global model, scaler, explainer
+    """Load trained models, scaler, and SHAP explainer."""
+    global model, model_xgb, scaler, explainer
+
+    # Load Random Forest
     model_path = MODELS_DIR / "random_forest.pkl"
     scaler_path = MODELS_DIR / "scaler.pkl"
     explainer_path = MODELS_DIR / "random_forest_explainer.pkl"
@@ -52,6 +55,15 @@ def load_artifacts():
         print(
             f"WARNING: SHAP explainer not found at {explainer_path}. Explanations will not work."
         )
+
+    # Load XGBoost (optional - for comparison)
+    xgb_path = MODELS_DIR / "xgboost.pkl"
+    if xgb_path.exists():
+        with open(xgb_path, "rb") as f:
+            model_xgb = pickle.load(f)
+        print("XGBoost model loaded for comparison")
+    else:
+        print("WARNING: XGBoost model not found. Comparison features disabled.")
 
 
 @asynccontextmanager
@@ -209,6 +221,50 @@ async def explain(customer: CustomerData):
                 "churn_label": "Yes" if pred == 1 else "No",
             },
             "explanation": explanation,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/predict/compare", tags=["Predictions"])
+async def compare_models(customer: CustomerData):
+    """Compare predictions between RandomForest and XGBoost models."""
+    if model is None:
+        raise HTTPException(status_code=500, detail="RandomForest model not loaded")
+    if model_xgb is None:
+        raise HTTPException(status_code=500, detail="XGBoost model not loaded")
+
+    try:
+        input_df = preprocess_input(customer.dict())
+
+        # RandomForest prediction
+        rf_prob = model.predict_proba(input_df)[0, 1]
+        rf_pred = model.predict(input_df)[0]
+
+        # XGBoost prediction
+        xgb_prob = model_xgb.predict_proba(input_df)[0, 1]
+        xgb_pred = model_xgb.predict(input_df)[0]
+
+        # Determine agreement
+        agree = rf_pred == xgb_pred
+        confidence_diff = abs(rf_prob - xgb_prob)
+
+        return {
+            "random_forest": {
+                "churn_probability": round(float(rf_prob), 4),
+                "churn_prediction": int(rf_pred),
+                "churn_label": "Yes" if rf_pred == 1 else "No",
+            },
+            "xgboost": {
+                "churn_probability": round(float(xgb_prob), 4),
+                "churn_prediction": int(xgb_pred),
+                "churn_label": "Yes" if xgb_pred == 1 else "No",
+            },
+            "comparison": {
+                "models_agree": agree,
+                "confidence_difference": round(float(confidence_diff), 4),
+                "average_probability": round(float((rf_prob + xgb_prob) / 2), 4),
+            },
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -565,6 +621,132 @@ async def get_churn_profile():
             "by_tenure_bucket": by_tenure,
             "by_payment_method": by_payment,
             "by_internet_service": by_internet,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/alerts/check", tags=["Alerts"])
+async def check_alerts(threshold: float = 0.5):
+    """Check if any customers have high churn risk above threshold.
+
+    Args:
+        threshold: Churn probability threshold (default 0.5)
+    """
+    try:
+        dataset_path = Path("/app/data/raw/WA_Fn-UseC_-Telco-Customer-Churn.csv")
+        if not dataset_path.exists():
+            raise HTTPException(status_code=404, detail="Dataset not found")
+
+        df = pd.read_csv(dataset_path)
+
+        # Get predictions for all customers
+        output_df = run_predictions(df)
+
+        # Filter high-risk customers
+        high_risk = output_df[output_df["churn_probability"] >= threshold]
+
+        # Get top 10 highest risk
+        top_risk = high_risk.nlargest(10, "churn_probability")[
+            [
+                "customerID",
+                "churn_probability",
+                "churn_label",
+                "Contract",
+                "tenure",
+                "MonthlyCharges",
+            ]
+        ].to_dict("records")
+
+        return {
+            "threshold": threshold,
+            "total_customers": len(output_df),
+            "high_risk_count": len(high_risk),
+            "high_risk_percentage": round(len(high_risk) / len(output_df) * 100, 2),
+            "top_risk_customers": top_risk,
+            "alert_triggered": len(high_risk) > 0,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/monitoring/drift", tags=["Monitoring"])
+async def check_data_drift():
+    """Check for potential data drift by comparing current data statistics
+    against baseline (training data) statistics.
+    """
+    try:
+        dataset_path = Path("/app/data/raw/WA_Fn-UseC_-Telco-Customer-Churn.csv")
+        if not dataset_path.exists():
+            raise HTTPException(status_code=404, detail="Dataset not found")
+
+        df = pd.read_csv(dataset_path)
+
+        # Convert numeric columns
+        df["TotalCharges"] = pd.to_numeric(df["TotalCharges"], errors="coerce").fillna(
+            0
+        )
+
+        # Calculate current statistics
+        numeric_cols = ["tenure", "MonthlyCharges", "TotalCharges"]
+        current_stats = {}
+
+        for col in numeric_cols:
+            current_stats[col] = {
+                "mean": round(float(df[col].mean()), 4),
+                "std": round(float(df[col].std()), 4),
+                "min": round(float(df[col].min()), 4),
+                "max": round(float(df[col].max()), 4),
+            }
+
+        # Known baseline statistics from original dataset
+        baseline_stats = {
+            "tenure": {"mean": 32.37, "std": 24.56, "min": 0.0, "max": 72.0},
+            "MonthlyCharges": {
+                "mean": 64.76,
+                "std": 30.09,
+                "min": 18.25,
+                "max": 118.75,
+            },
+            "TotalCharges": {
+                "mean": 2283.30,
+                "std": 2266.77,
+                "min": 18.80,
+                "max": 8684.80,
+            },
+        }
+
+        # Calculate drift metrics
+        drift_metrics = {}
+        for col in numeric_cols:
+            mean_diff = abs(current_stats[col]["mean"] - baseline_stats[col]["mean"])
+            std_diff = abs(current_stats[col]["std"] - baseline_stats[col]["std"])
+
+            # Simple drift score: normalized difference
+            drift_score = mean_diff / baseline_stats[col]["std"]
+
+            drift_metrics[col] = {
+                "current_mean": current_stats[col]["mean"],
+                "baseline_mean": baseline_stats[col]["mean"],
+                "mean_difference": round(mean_diff, 4),
+                "drift_score": round(drift_score, 4),
+                "drift_detected": drift_score > 0.5,  # Threshold for drift
+            }
+
+        # Overall drift status
+        any_drift = any(m["drift_detected"] for m in drift_metrics.values())
+
+        return {
+            "drift_detected": any_drift,
+            "drift_metrics": drift_metrics,
+            "dataset_size": len(df),
+            "check_timestamp": pd.Timestamp.now().isoformat(),
         }
 
     except HTTPException:

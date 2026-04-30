@@ -28,12 +28,13 @@ if "selected_features" not in st.session_state:
     st.session_state.selected_features = None
 
 # Tabs for single and batch prediction
-tab1, tab2, tab3, tab4 = st.tabs(
+tab1, tab2, tab3, tab4, tab5 = st.tabs(
     [
         "🔮 Single Prediction",
         "📁 Batch Prediction",
         "👤 Customer Details",
         "📈 Analytics",
+        "⚖️ Model Comparison",
     ]
 )
 
@@ -673,6 +674,218 @@ with tab4:
                 st.dataframe(internet_df, use_container_width=True)
     except Exception as e:
         st.error(f"Error loading details: {e}")
+
+with tab5:
+    st.header("⚖️ Model Comparison")
+    st.markdown("Compare predictions between RandomForest and XGBoost models.")
+
+    # Use same inputs as single prediction
+    st.subheader("Enter Customer Data")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        cmp_gender = st.selectbox("Gender", ["Male", "Female"], key="cmp_gender")
+        cmp_senior = st.selectbox(
+            "Senior Citizen",
+            [0, 1],
+            format_func=lambda x: "Yes" if x == 1 else "No",
+            key="cmp_senior",
+        )
+        cmp_partner = st.selectbox("Partner", ["Yes", "No"], key="cmp_partner")
+        cmp_dependents = st.selectbox("Dependents", ["Yes", "No"], key="cmp_dependents")
+        cmp_tenure = st.slider("Tenure (months)", 0, 100, 12, key="cmp_tenure")
+        cmp_phone = st.selectbox("Phone Service", ["Yes", "No"], key="cmp_phone")
+        cmp_multiple = st.selectbox(
+            "Multiple Lines", ["Yes", "No", "No phone service"], key="cmp_multiple"
+        )
+        cmp_internet = st.selectbox(
+            "Internet Service", ["DSL", "Fiber optic", "No"], key="cmp_internet"
+        )
+        cmp_security = st.selectbox(
+            "Online Security", ["Yes", "No", "No internet service"], key="cmp_security"
+        )
+        cmp_backup = st.selectbox(
+            "Online Backup", ["Yes", "No", "No internet service"], key="cmp_backup"
+        )
+
+    with col2:
+        cmp_protection = st.selectbox(
+            "Device Protection",
+            ["Yes", "No", "No internet service"],
+            key="cmp_protection",
+        )
+        cmp_tech = st.selectbox(
+            "Tech Support", ["Yes", "No", "No internet service"], key="cmp_tech"
+        )
+        cmp_streaming_tv = st.selectbox(
+            "Streaming TV", ["Yes", "No", "No internet service"], key="cmp_streaming_tv"
+        )
+        cmp_streaming_movies = st.selectbox(
+            "Streaming Movies",
+            ["Yes", "No", "No internet service"],
+            key="cmp_streaming_movies",
+        )
+        cmp_contract = st.selectbox(
+            "Contract", ["Month-to-month", "One year", "Two year"], key="cmp_contract"
+        )
+        cmp_paperless = st.selectbox(
+            "Paperless Billing", ["Yes", "No"], key="cmp_paperless"
+        )
+        cmp_payment = st.selectbox(
+            "Payment Method",
+            [
+                "Electronic check",
+                "Mailed check",
+                "Bank transfer (automatic)",
+                "Credit card (automatic)",
+            ],
+            key="cmp_payment",
+        )
+        cmp_monthly = st.slider(
+            "Monthly Charges ($)", 0.0, 150.0, 70.0, key="cmp_monthly"
+        )
+        cmp_total = st.slider("Total Charges ($)", 0.0, 9000.0, 1000.0, key="cmp_total")
+
+    if st.button("🔮 Compare Models", type="primary"):
+        payload = {
+            "gender": cmp_gender,
+            "SeniorCitizen": cmp_senior,
+            "Partner": cmp_partner,
+            "Dependents": cmp_dependents,
+            "tenure": cmp_tenure,
+            "PhoneService": cmp_phone,
+            "MultipleLines": cmp_multiple,
+            "InternetService": cmp_internet,
+            "OnlineSecurity": cmp_security,
+            "OnlineBackup": cmp_backup,
+            "DeviceProtection": cmp_protection,
+            "TechSupport": cmp_tech,
+            "StreamingTV": cmp_streaming_tv,
+            "StreamingMovies": cmp_streaming_movies,
+            "Contract": cmp_contract,
+            "PaperlessBilling": cmp_paperless,
+            "PaymentMethod": cmp_payment,
+            "MonthlyCharges": cmp_monthly,
+            "TotalCharges": cmp_total,
+        }
+
+        try:
+            response = requests.post(f"{API_URL}/predict/compare", json=payload)
+            if response.status_code == 200:
+                result = response.json()
+
+                # Display comparison
+                col1, col2, col3 = st.columns(3)
+
+                with col1:
+                    st.subheader("🌲 RandomForest")
+                    rf = result["random_forest"]
+                    st.metric("Prediction", rf["churn_label"])
+                    st.metric("Probability", f"{rf['churn_probability']:.2%}")
+
+                with col2:
+                    st.subheader("⚡ XGBoost")
+                    xgb = result["xgboost"]
+                    st.metric("Prediction", xgb["churn_label"])
+                    st.metric("Probability", f"{xgb['churn_probability']:.2%}")
+
+                with col3:
+                    st.subheader("📊 Comparison")
+                    comp = result["comparison"]
+                    st.metric("Models Agree", "Yes" if comp["models_agree"] else "No")
+                    st.metric("Confidence Diff", f"{comp['confidence_difference']:.4f}")
+                    st.metric("Avg Probability", f"{comp['average_probability']:.2%}")
+
+                # Visual comparison
+                st.subheader("Probability Comparison")
+                comparison_data = {
+                    "Model": ["RandomForest", "XGBoost", "Average"],
+                    "Probability": [
+                        rf["churn_probability"],
+                        xgb["churn_probability"],
+                        comp["average_probability"],
+                    ],
+                }
+                st.bar_chart(
+                    comparison_data,
+                    x="Model",
+                    y="Probability",
+                    use_container_width=True,
+                )
+
+                # Agreement indicator
+                if comp["models_agree"]:
+                    st.success("✅ Both models agree on the prediction!")
+                else:
+                    st.warning("⚠️ Models disagree. Consider reviewing the prediction.")
+            else:
+                st.error(f"API Error: {response.json().get('detail', 'Unknown error')}")
+        except Exception as e:
+            st.error(f"Error comparing models: {e}")
+
+    # Monitoring & Alerts Section
+    st.markdown("---")
+    st.header("🚨 Monitoring & Alerts")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.subheader("High Risk Alert Check")
+        threshold = st.slider(
+            "Churn Probability Threshold", 0.0, 1.0, 0.5, key="alert_threshold"
+        )
+        if st.button("🔍 Check Alerts", key="check_alerts"):
+            try:
+                response = requests.get(
+                    f"{API_URL}/alerts/check", params={"threshold": threshold}
+                )
+                if response.status_code == 200:
+                    alert_data = response.json()
+
+                    if alert_data["alert_triggered"]:
+                        st.error(
+                            f"🚨 ALERT: {alert_data['high_risk_count']} customers ({alert_data['high_risk_percentage']}%) "
+                            f"have churn probability >= {threshold}"
+                        )
+
+                        st.subheader("Top 10 Highest Risk Customers")
+                        risk_df = pd.DataFrame(alert_data["top_risk_customers"])
+                        st.dataframe(risk_df, use_container_width=True)
+                    else:
+                        st.success(
+                            f"✅ No alerts. All customers have churn probability < {threshold}"
+                        )
+                else:
+                    st.error("Failed to check alerts")
+            except Exception as e:
+                st.error(f"Error: {e}")
+
+    with col2:
+        st.subheader("Data Drift Monitoring")
+        if st.button("📊 Check Data Drift", key="check_drift"):
+            try:
+                response = requests.get(f"{API_URL}/monitoring/drift")
+                if response.status_code == 200:
+                    drift_data = response.json()
+
+                    if drift_data["drift_detected"]:
+                        st.error("🚨 DATA DRIFT DETECTED!")
+                    else:
+                        st.success("✅ No significant data drift detected")
+
+                    # Show drift metrics
+                    st.markdown("**Drift Metrics:**")
+                    for feature, metrics in drift_data["drift_metrics"].items():
+                        drift_status = "🚨" if metrics["drift_detected"] else "✅"
+                        st.markdown(
+                            f"{drift_status} **{feature}**: drift_score={metrics['drift_score']}, "
+                            f"current_mean={metrics['current_mean']:.2f}, "
+                            f"baseline_mean={metrics['baseline_mean']:.2f}"
+                        )
+                else:
+                    st.error("Failed to check drift")
+            except Exception as e:
+                st.error(f"Error: {e}")
 
 # Health check in sidebar
 st.sidebar.markdown("---")
