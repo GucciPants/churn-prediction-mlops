@@ -482,6 +482,97 @@ async def get_customer_prediction(customer_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/analytics/feature-importance", tags=["Analytics"])
+async def get_feature_importance():
+    """Get global feature importance from the trained model."""
+    if model is None:
+        raise HTTPException(status_code=500, detail="Model not loaded")
+
+    try:
+        # Get feature importances from RandomForest
+        importances = model.feature_importances_
+        feature_names = list(model.feature_names_in_)
+
+        # Create sorted list
+        importance_data = [
+            {"feature": name, "importance": float(imp)}
+            for name, imp in zip(feature_names, importances)
+        ]
+        importance_data.sort(key=lambda x: x["importance"], reverse=True)
+
+        return {
+            "model": "random_forest",
+            "features": importance_data[:15],  # Top 15
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/analytics/churn-profile", tags=["Analytics"])
+async def get_churn_profile():
+    """Get churn rate profiles by different dimensions."""
+    try:
+        dataset_path = Path("/app/data/raw/WA_Fn-UseC_-Telco-Customer-Churn.csv")
+        if not dataset_path.exists():
+            raise HTTPException(status_code=404, detail="Built-in dataset not found")
+
+        df = pd.read_csv(dataset_path)
+
+        # Ensure Churn is binary
+        df["Churn"] = df["Churn"].map({"Yes": 1, "No": 0})
+
+        # Helper to compute churn rate
+        def churn_rate(group):
+            return {
+                "group": str(group.name),
+                "total": len(group),
+                "churned": int(group["Churn"].sum()),
+                "churn_rate": round(float(group["Churn"].mean()) * 100, 1),
+            }
+
+        # By Contract
+        by_contract = (
+            df.groupby("Contract").apply(churn_rate, include_groups=False).tolist()
+        )
+
+        # By Tenure buckets
+        df["tenure_bucket"] = pd.cut(
+            df["tenure"],
+            bins=[0, 12, 24, 48, 100],
+            labels=["0-12 months", "12-24 months", "24-48 months", "48+ months"],
+        )
+        by_tenure = (
+            df.groupby("tenure_bucket", observed=False)
+            .apply(churn_rate, include_groups=False)
+            .tolist()
+        )
+
+        # By Payment Method
+        by_payment = (
+            df.groupby("PaymentMethod").apply(churn_rate, include_groups=False).tolist()
+        )
+
+        # By Internet Service
+        by_internet = (
+            df.groupby("InternetService")
+            .apply(churn_rate, include_groups=False)
+            .tolist()
+        )
+
+        return {
+            "by_contract": by_contract,
+            "by_tenure_bucket": by_tenure,
+            "by_payment_method": by_payment,
+            "by_internet_service": by_internet,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/", tags=["Info"])
 async def root():
     """Root endpoint."""

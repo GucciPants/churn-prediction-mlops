@@ -28,8 +28,13 @@ if "selected_features" not in st.session_state:
     st.session_state.selected_features = None
 
 # Tabs for single and batch prediction
-tab1, tab2, tab3 = st.tabs(
-    ["🔮 Single Prediction", "📁 Batch Prediction", "👤 Customer Details"]
+tab1, tab2, tab3, tab4 = st.tabs(
+    [
+        "🔮 Single Prediction",
+        "📁 Batch Prediction",
+        "👤 Customer Details",
+        "📈 Analytics",
+    ]
 )
 
 
@@ -585,6 +590,89 @@ with tab3:
                 st.error(f"Error loading customer details: {e}")
     else:
         st.info("Select a customer from the Batch Prediction tab to view details here.")
+
+
+with tab4:
+    st.header("📈 Churn Analytics")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.subheader("Feature Importance")
+        try:
+            response = requests.get(f"{API_URL}/analytics/feature-importance")
+            if response.status_code == 200:
+                data = response.json()
+                features_df = pd.DataFrame(data["features"])
+
+                # Display as bar chart
+                st.bar_chart(
+                    features_df.head(10),
+                    x="feature",
+                    y="importance",
+                    use_container_width=True,
+                )
+
+                # Show table
+                with st.expander("View all features"):
+                    st.dataframe(features_df, use_container_width=True)
+            else:
+                st.error("Failed to load feature importance")
+        except Exception as e:
+            st.error(f"Error: {e}")
+
+    with col2:
+        st.subheader("Churn Profiles")
+        try:
+            response = requests.get(f"{API_URL}/analytics/churn-profile")
+            if response.status_code == 200:
+                data = response.json()
+
+                # Contract type
+                st.markdown("**By Contract Type**")
+                contract_df = pd.DataFrame(data["by_contract"])
+                st.bar_chart(
+                    contract_df,
+                    x="group",
+                    y="churn_rate",
+                    use_container_width=True,
+                )
+
+                # Tenure
+                st.markdown("**By Tenure**")
+                tenure_df = pd.DataFrame(data["by_tenure_bucket"])
+                st.bar_chart(
+                    tenure_df,
+                    x="group",
+                    y="churn_rate",
+                    use_container_width=True,
+                )
+            else:
+                st.error("Failed to load churn profiles")
+        except Exception as e:
+            st.error(f"Error: {e}")
+
+    # Detailed tables
+    st.markdown("---")
+    st.subheader("Detailed Breakdown")
+
+    try:
+        response = requests.get(f"{API_URL}/analytics/churn-profile")
+        if response.status_code == 200:
+            data = response.json()
+
+            c1, c2 = st.columns(2)
+            with c1:
+                st.markdown("**Payment Method**")
+                payment_df = pd.DataFrame(data["by_payment_method"])
+                st.dataframe(payment_df, use_container_width=True)
+
+            with c2:
+                st.markdown("**Internet Service**")
+                internet_df = pd.DataFrame(data["by_internet_service"])
+                st.dataframe(internet_df, use_container_width=True)
+    except Exception as e:
+        st.error(f"Error loading details: {e}")
 
 # Health check in sidebar
 st.sidebar.markdown("---")
