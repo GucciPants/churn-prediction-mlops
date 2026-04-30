@@ -18,7 +18,7 @@ This project predicts customer churn based on historical telecom data. It featur
 
 ### 1. Clone the repository
 ```bash
-git clone https://github.com/YOUR_USERNAME/churn-prediction-mlops.git
+git clone https://github.com/GucciPants/churn-prediction-mlops.git
 cd churn-prediction-mlops
 ```
 
@@ -42,18 +42,54 @@ python src/train.py
 
 ```
 churn-prediction-mlops/
-├── doc/           # Documentation
-├── data/          # Data files
-├── src/           # ML pipeline scripts
-├── api/           # FastAPI application
-├── dashboard/     # Streamlit dashboard
-├── tests/         # Unit and integration tests
-├── notebooks/     # Jupyter notebooks for EDA
-├── .github/workflows/  # CI/CD pipelines
+├── doc/                  # Documentation
+│   ├── architecture.md
+│   └── decisions.md
+├── data/                 # Data files
+│   └── raw/
+├── src/                  # ML pipeline scripts
+│   ├── config.py
+│   ├── features.py
+│   └── train.py
+├── api/                  # FastAPI application
+│   └── main.py
+├── dashboard/            # Streamlit dashboard
+│   └── app.py
+├── tests/                # Unit and integration tests
+│   ├── test_features.py
+│   └── test_api.py
+├── notebooks/            # Jupyter notebooks for EDA
+│   └── 01_eda.ipynb
+├── models/               # Trained model artifacts
+├── .github/workflows/    # CI/CD pipelines
+│   └── ci.yml
 ├── Dockerfile
+├── Dockerfile.dashboard
 ├── docker-compose.yml
-└── requirements.txt
+├── requirements.txt
+└── README.md
 ```
+
+## API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/` | GET | API info |
+| `/health` | GET | Health check |
+| `/predict` | POST | Single customer prediction |
+| `/predict/batch` | POST | Batch predictions |
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| ML | scikit-learn, XGBoost |
+| Tracking | MLflow |
+| API | FastAPI, Uvicorn |
+| Frontend | Streamlit |
+| Container | Docker, Docker Compose |
+| CI/CD | GitHub Actions |
+| Testing | pytest |
 
 ## License
 
