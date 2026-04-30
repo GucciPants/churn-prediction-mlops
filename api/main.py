@@ -223,14 +223,50 @@ async def predict_batch_csv(file: UploadFile = File(...)):
                 detail=f"Missing required columns: {', '.join(missing_cols)}"
             )
 
-        # Process each row
-        results = []
-        for _, row in df.iterrows():
-            customer_data = row.to_dict()
-            input_df = preprocess_input(customer_data)
-            prob = model.predict_proba(input_df)[0, 1]
-            pred = model.predict(input_df)[0]
+        # Clean data (handle TotalCharges spaces, etc.)
+        df_clean = df.copy()
+        df_clean["TotalCharges"] = pd.to_numeric(df_clean["TotalCharges"], errors="coerce")
+        df_clean["TotalCharges"] = df_clean["TotalCharges"].fillna(0)
+        df_clean["SeniorCitizen"] = df_clean["SeniorCitizen"].astype(str)
 
+        # Encode binary features
+        binary_mappings = {
+            "gender": {"Female": 0, "Male": 1},
+            "Partner": {"No": 0, "Yes": 1},
+            "Dependents": {"No": 0, "Yes": 1},
+            "PhoneService": {"No": 0, "Yes": 1},
+            "PaperlessBilling": {"No": 0, "Yes": 1},
+        }
+        for col, mapping in binary_mappings.items():
+            if col in df_clean.columns:
+                df_clean[col] = df_clean[col].map(mapping)
+
+        # One-hot encode categoricals
+        cat_cols = [
+            "MultipleLines", "InternetService", "OnlineSecurity", "OnlineBackup",
+            "DeviceProtection", "TechSupport", "StreamingTV", "StreamingMovies",
+            "Contract", "PaymentMethod",
+        ]
+        df_encoded = pd.get_dummies(df_clean, columns=cat_cols, drop_first=True)
+
+        # Align columns with training data
+        expected_cols = list(model.feature_names_in_)
+        for col in expected_cols:
+            if col not in df_encoded.columns:
+                df_encoded[col] = 0
+        df_encoded = df_encoded[expected_cols]
+
+        # Scale numeric
+        numeric_cols = ["tenure", "MonthlyCharges", "TotalCharges"]
+        df_encoded[numeric_cols] = scaler.transform(df_encoded[numeric_cols])
+
+        # Predict for all rows
+        probs = model.predict_proba(df_encoded)[:, 1]
+        preds = model.predict(df_encoded)
+
+        # Build results
+        results = []
+        for prob, pred in zip(probs, preds):
             results.append({
                 "churn_probability": round(float(prob), 4),
                 "churn_prediction": int(pred),
