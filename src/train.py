@@ -12,8 +12,8 @@ from sklearn.metrics import accuracy_score, classification_report, f1_score, roc
 from xgboost import XGBClassifier
 
 sys.path.append(str(Path(__file__).resolve().parent.parent))
-from src.config import MLFLOW_TRACKING_URI, MODELS, MODELS_DIR, RANDOM_STATE
-from src.features import build_feature_pipeline, RAW_DATA_PATH
+from src.config import MLFLOW_TRACKING_URI, MODELS, MODELS_DIR, RANDOM_STATE, RAW_DATA_PATH
+from src.features import build_feature_pipeline
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
