@@ -295,6 +295,108 @@ async def predict_batch_csv(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+def run_predictions(df: pd.DataFrame) -> pd.DataFrame:
+    """Run batch predictions on a dataframe."""
+    df_clean = df.copy()
+    df_clean["TotalCharges"] = pd.to_numeric(df_clean["TotalCharges"], errors="coerce")
+    df_clean["TotalCharges"] = df_clean["TotalCharges"].fillna(0)
+    df_clean["SeniorCitizen"] = df_clean["SeniorCitizen"].astype(str)
+
+    binary_mappings = {
+        "gender": {"Female": 0, "Male": 1},
+        "Partner": {"No": 0, "Yes": 1},
+        "Dependents": {"No": 0, "Yes": 1},
+        "PhoneService": {"No": 0, "Yes": 1},
+        "PaperlessBilling": {"No": 0, "Yes": 1},
+    }
+    for col, mapping in binary_mappings.items():
+        if col in df_clean.columns:
+            df_clean[col] = df_clean[col].map(mapping)
+
+    cat_cols = [
+        "MultipleLines", "InternetService", "OnlineSecurity", "OnlineBackup",
+        "DeviceProtection", "TechSupport", "StreamingTV", "StreamingMovies",
+        "Contract", "PaymentMethod",
+    ]
+    df_encoded = pd.get_dummies(df_clean, columns=cat_cols, drop_first=True)
+
+    expected_cols = list(model.feature_names_in_)
+    for col in expected_cols:
+        if col not in df_encoded.columns:
+            df_encoded[col] = 0
+    df_encoded = df_encoded[expected_cols]
+
+    numeric_cols = ["tenure", "MonthlyCharges", "TotalCharges"]
+    df_encoded[numeric_cols] = scaler.transform(df_encoded[numeric_cols])
+
+    probs = model.predict_proba(df_encoded)[:, 1]
+    preds = model.predict(df_encoded)
+
+    results = []
+    for prob, pred in zip(probs, preds):
+        results.append({
+            "churn_probability": round(float(prob), 4),
+            "churn_prediction": int(pred),
+            "churn_label": "Yes" if pred == 1 else "No",
+            "risk_level": "High" if prob > 0.5 else "Medium" if prob > 0.3 else "Low",
+        })
+
+    results_df = pd.DataFrame(results)
+    return pd.concat([df.reset_index(drop=True), results_df], axis=1)
+
+
+@app.post("/predict/batch/dataset", tags=["Predictions"])
+async def predict_batch_dataset():
+    """Predict churn for all customers in the built-in dataset."""
+    if model is None:
+        raise HTTPException(status_code=500, detail="Model not loaded")
+
+    try:
+        dataset_path = Path("/app/data/raw/WA_Fn-UseC_-Telco-Customer-Churn.csv")
+        if not dataset_path.exists():
+            raise HTTPException(status_code=404, detail="Built-in dataset not found")
+
+        df = pd.read_csv(dataset_path)
+        output_df = run_predictions(df)
+
+        # Return as JSON
+        records = output_df.to_dict(orient="records")
+        return {"total": len(records), "predictions": records}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/predict/customer/{customer_id}", tags=["Predictions"])
+async def get_customer_prediction(customer_id: str):
+    """Get prediction details for a specific customer from the dataset."""
+    if model is None:
+        raise HTTPException(status_code=500, detail="Model not loaded")
+
+    try:
+        dataset_path = Path("/app/data/raw/WA_Fn-UseC_-Telco-Customer-Churn.csv")
+        if not dataset_path.exists():
+            raise HTTPException(status_code=404, detail="Built-in dataset not found")
+
+        df = pd.read_csv(dataset_path)
+        customer_df = df[df["customerID"] == customer_id]
+
+        if customer_df.empty:
+            raise HTTPException(status_code=404, detail=f"Customer {customer_id} not found")
+
+        output_df = run_predictions(customer_df)
+        record = output_df.iloc[0].to_dict()
+
+        return record
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/", tags=["Info"])
 async def root():
     """Root endpoint."""
