@@ -15,6 +15,13 @@ services:
       - mlflow
     networks:
       - churn-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   train:
     build: .
@@ -43,9 +50,11 @@ services:
     environment:
       - API_URL=http://api:8000
     depends_on:
-      - api
+      api:
+        condition: service_healthy
     networks:
       - churn-net
+    restart: unless-stopped
 
   mlflow:
     image: python:3.11-slim

@@ -1,12 +1,47 @@
 """Streamlit dashboard for churn prediction."""
 
 import io
+import time
 
 import pandas as pd
 import requests
 import streamlit as st
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 API_URL = "http://api:8000"
+
+
+def get_session_with_retries():
+    """Create a requests session with retry logic."""
+    session = requests.Session()
+    retries = Retry(
+        total=5,
+        backoff_factor=1,
+        status_forcelist=[502, 503, 504],
+        allowed_methods=["GET", "POST"],
+    )
+    session.mount("http://", HTTPAdapter(max_retries=retries))
+    return session
+
+
+def check_api_connection():
+    """Check if API is available."""
+    try:
+        session = get_session_with_retries()
+        response = session.get(f"{API_URL}/health", timeout=10)
+        return response.status_code == 200
+    except Exception:
+        return False
+
+
+# Check API availability
+if not check_api_connection():
+    st.warning(
+        "⚠️ API is not available. Please make sure the API container is running."
+    )
+    st.info("If you just started Docker, wait a minute for containers to initialize.")
+    st.stop()
 
 st.set_page_config(
     page_title="Churn Prediction Dashboard",
