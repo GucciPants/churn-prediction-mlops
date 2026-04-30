@@ -1,4 +1,5 @@
 """Data loading, cleaning, and feature engineering pipeline."""
+
 import logging
 from pathlib import Path
 from typing import Tuple
@@ -94,7 +95,9 @@ def preprocess_features(
     X = encode_binary_features(X)
 
     # One-hot encode remaining categoricals
-    categorical_to_encode = [c for c in CATEGORICAL_FEATURES if c in X.columns and c not in BINARY_FEATURES]
+    categorical_to_encode = [
+        c for c in CATEGORICAL_FEATURES if c in X.columns and c not in BINARY_FEATURES
+    ]
     if categorical_to_encode:
         X = pd.get_dummies(X, columns=categorical_to_encode, drop_first=True)
 
@@ -120,7 +123,9 @@ def split_data(
     return X_train, X_test, y_train, y_test
 
 
-def build_feature_pipeline(raw_path: Path) -> Tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series, StandardScaler]:
+def build_feature_pipeline(
+    raw_path: Path,
+) -> Tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series, StandardScaler]:
     """Full pipeline: load, clean, preprocess, split."""
     df = load_data(raw_path)
     df = clean_data(df)

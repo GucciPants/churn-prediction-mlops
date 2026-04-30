@@ -1,4 +1,5 @@
 """Train churn prediction models with MLflow tracking."""
+
 import logging
 import pickle
 import sys
@@ -8,18 +9,37 @@ import mlflow
 import mlflow.sklearn
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import accuracy_score, classification_report, f1_score, roc_auc_score
+from sklearn.metrics import (
+    accuracy_score,
+    classification_report,
+    f1_score,
+    roc_auc_score,
+)
 from xgboost import XGBClassifier
 
 sys.path.append(str(Path(__file__).resolve().parent.parent))
-from src.config import MLFLOW_TRACKING_URI, MODELS, MODELS_DIR, RANDOM_STATE, RAW_DATA_PATH
+from src.config import (
+    MLFLOW_TRACKING_URI,
+    MODELS,
+    MODELS_DIR,
+    RANDOM_STATE,
+    RAW_DATA_PATH,
+)
 from src.features import build_feature_pipeline
 
 logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
 
 
-def train_model(model_name: str, X_train: pd.DataFrame, y_train: pd.Series, X_test: pd.DataFrame, y_test: pd.Series):
+def train_model(
+    model_name: str,
+    X_train: pd.DataFrame,
+    y_train: pd.Series,
+    X_test: pd.DataFrame,
+    y_test: pd.Series,
+):
     """Train a single model and log metrics with MLflow."""
     logger.info(f"Training {model_name}")
 
@@ -42,7 +62,9 @@ def train_model(model_name: str, X_train: pd.DataFrame, y_train: pd.Series, X_te
     f1 = f1_score(y_test, y_pred)
     roc_auc = roc_auc_score(y_test, y_prob)
 
-    logger.info(f"{model_name} - Accuracy: {accuracy:.4f}, F1: {f1:.4f}, ROC AUC: {roc_auc:.4f}")
+    logger.info(
+        f"{model_name} - Accuracy: {accuracy:.4f}, F1: {f1:.4f}, ROC AUC: {roc_auc:.4f}"
+    )
 
     # Classification report
     report = classification_report(y_test, y_pred, output_dict=True)

@@ -1,4 +1,5 @@
 """Streamlit dashboard for churn prediction."""
+
 import json
 
 import requests
@@ -20,28 +21,51 @@ st.sidebar.header("Customer Features")
 
 # Demographics
 gender = st.sidebar.selectbox("Gender", ["Male", "Female"])
-senior = st.sidebar.selectbox("Senior Citizen", [0, 1], format_func=lambda x: "Yes" if x == 1 else "No")
+senior = st.sidebar.selectbox(
+    "Senior Citizen", [0, 1], format_func=lambda x: "Yes" if x == 1 else "No"
+)
 partner = st.sidebar.selectbox("Partner", ["Yes", "No"])
 dependents = st.sidebar.selectbox("Dependents", ["Yes", "No"])
 
 # Services
 tenure = st.sidebar.slider("Tenure (months)", 0, 100, 12)
 phone_service = st.sidebar.selectbox("Phone Service", ["Yes", "No"])
-multiple_lines = st.sidebar.selectbox("Multiple Lines", ["Yes", "No", "No phone service"])
-internet_service = st.sidebar.selectbox("Internet Service", ["DSL", "Fiber optic", "No"])
-online_security = st.sidebar.selectbox("Online Security", ["Yes", "No", "No internet service"])
-online_backup = st.sidebar.selectbox("Online Backup", ["Yes", "No", "No internet service"])
-device_protection = st.sidebar.selectbox("Device Protection", ["Yes", "No", "No internet service"])
-tech_support = st.sidebar.selectbox("Tech Support", ["Yes", "No", "No internet service"])
-streaming_tv = st.sidebar.selectbox("Streaming TV", ["Yes", "No", "No internet service"])
-streaming_movies = st.sidebar.selectbox("Streaming Movies", ["Yes", "No", "No internet service"])
+multiple_lines = st.sidebar.selectbox(
+    "Multiple Lines", ["Yes", "No", "No phone service"]
+)
+internet_service = st.sidebar.selectbox(
+    "Internet Service", ["DSL", "Fiber optic", "No"]
+)
+online_security = st.sidebar.selectbox(
+    "Online Security", ["Yes", "No", "No internet service"]
+)
+online_backup = st.sidebar.selectbox(
+    "Online Backup", ["Yes", "No", "No internet service"]
+)
+device_protection = st.sidebar.selectbox(
+    "Device Protection", ["Yes", "No", "No internet service"]
+)
+tech_support = st.sidebar.selectbox(
+    "Tech Support", ["Yes", "No", "No internet service"]
+)
+streaming_tv = st.sidebar.selectbox(
+    "Streaming TV", ["Yes", "No", "No internet service"]
+)
+streaming_movies = st.sidebar.selectbox(
+    "Streaming Movies", ["Yes", "No", "No internet service"]
+)
 
 # Billing
 contract = st.sidebar.selectbox("Contract", ["Month-to-month", "One year", "Two year"])
 paperless = st.sidebar.selectbox("Paperless Billing", ["Yes", "No"])
 payment_method = st.sidebar.selectbox(
     "Payment Method",
-    ["Electronic check", "Mailed check", "Bank transfer (automatic)", "Credit card (automatic)"]
+    [
+        "Electronic check",
+        "Mailed check",
+        "Bank transfer (automatic)",
+        "Credit card (automatic)",
+    ],
 )
 monthly_charges = st.sidebar.slider("Monthly Charges ($)", 0.0, 150.0, 70.0)
 total_charges = st.sidebar.slider("Total Charges ($)", 0.0, 9000.0, 1000.0)
@@ -80,7 +104,11 @@ if st.sidebar.button("Predict Churn", type="primary"):
         with col2:
             st.metric("Churn Probability", f"{result['churn_probability']:.2%}")
         with col3:
-            risk = "High" if result["churn_probability"] > 0.5 else "Medium" if result["churn_probability"] > 0.3 else "Low"
+            risk = (
+                "High"
+                if result["churn_probability"] > 0.5
+                else "Medium" if result["churn_probability"] > 0.3 else "Low"
+            )
             st.metric("Risk Level", risk)
 
         # Visualization

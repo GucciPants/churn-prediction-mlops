@@ -1,4 +1,5 @@
 """Project configuration and constants."""
+
 import os
 from pathlib import Path
 

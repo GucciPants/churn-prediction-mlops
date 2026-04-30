@@ -1,4 +1,5 @@
 """FastAPI backend for churn prediction."""
+
 import pickle
 from pathlib import Path
 from typing import Any, Dict, List
@@ -28,10 +29,14 @@ def load_artifacts():
     scaler_path = MODELS_DIR / "scaler.pkl"
 
     if not model_path.exists():
-        print(f"WARNING: Model not found at {model_path}. Predictions will not work until training is run.")
+        print(
+            f"WARNING: Model not found at {model_path}. Predictions will not work until training is run."
+        )
         return
     if not scaler_path.exists():
-        print(f"WARNING: Scaler not found at {scaler_path}. Predictions will not work until training is run.")
+        print(
+            f"WARNING: Scaler not found at {scaler_path}. Predictions will not work until training is run."
+        )
         return
 
     with open(model_path, "rb") as f:
@@ -47,6 +52,7 @@ async def startup_event():
 
 class CustomerData(BaseModel):
     """Input schema for single prediction."""
+
     tenure: int = Field(..., ge=0, le=100, description="Number of months as a customer")
     MonthlyCharges: float = Field(..., ge=0, le=200, description="Monthly charges")
     TotalCharges: float = Field(..., ge=0, le=10000, description="Total charges")
@@ -67,17 +73,19 @@ class CustomerData(BaseModel):
     PaperlessBilling: str = Field(..., pattern="^(Yes|No)$")
     PaymentMethod: str = Field(
         ...,
-        pattern="^(Electronic check|Mailed check|Bank transfer \(automatic\)|Credit card \(automatic\))$"
+        pattern="^(Electronic check|Mailed check|Bank transfer \(automatic\)|Credit card \(automatic\))$",
     )
 
 
 class BatchPredictionInput(BaseModel):
     """Input schema for batch predictions."""
+
     customers: List[CustomerData]
 
 
 class PredictionResponse(BaseModel):
     """Output schema for predictions."""
+
     churn_probability: float
     churn_prediction: int
     churn_label: str
@@ -85,6 +93,7 @@ class PredictionResponse(BaseModel):
 
 class BatchPredictionResponse(BaseModel):
     """Output schema for batch predictions."""
+
     predictions: List[PredictionResponse]
 
 
@@ -105,9 +114,16 @@ def preprocess_input(data: Dict[str, Any]) -> pd.DataFrame:
 
     # One-hot encode categoricals
     cat_cols = [
-        "MultipleLines", "InternetService", "OnlineSecurity", "OnlineBackup",
-        "DeviceProtection", "TechSupport", "StreamingTV", "StreamingMovies",
-        "Contract", "PaymentMethod",
+        "MultipleLines",
+        "InternetService",
+        "OnlineSecurity",
+        "OnlineBackup",
+        "DeviceProtection",
+        "TechSupport",
+        "StreamingTV",
+        "StreamingMovies",
+        "Contract",
+        "PaymentMethod",
     ]
     df = pd.get_dummies(df, columns=cat_cols, drop_first=True)
 
@@ -151,7 +167,9 @@ async def predict(customer: CustomerData):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/predict/batch", response_model=BatchPredictionResponse, tags=["Predictions"])
+@app.post(
+    "/predict/batch", response_model=BatchPredictionResponse, tags=["Predictions"]
+)
 async def predict_batch(batch: BatchPredictionInput):
     """Predict churn for multiple customers."""
     if model is None:
