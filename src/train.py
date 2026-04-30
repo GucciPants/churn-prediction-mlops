@@ -69,19 +69,23 @@ def train_model(
     # Classification report
     report = classification_report(y_test, y_pred, output_dict=True)
 
-    # MLflow logging
-    mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
-    mlflow.set_experiment("churn_prediction")
+    # MLflow logging (optional - skip if MLflow is not available)
+    try:
+        mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
+        mlflow.set_experiment("churn_prediction")
 
-    with mlflow.start_run(run_name=model_name):
-        mlflow.log_params(MODELS[model_name])
-        mlflow.log_metric("accuracy", accuracy)
-        mlflow.log_metric("f1_score", f1)
-        mlflow.log_metric("roc_auc", roc_auc)
-        mlflow.log_metric("precision", report["1"]["precision"])
-        mlflow.log_metric("recall", report["1"]["recall"])
-        mlflow.sklearn.log_model(model, artifact_path="model")
-        logger.info(f"MLflow run logged for {model_name}")
+        with mlflow.start_run(run_name=model_name):
+            mlflow.log_params(MODELS[model_name])
+            mlflow.log_metric("accuracy", accuracy)
+            mlflow.log_metric("f1_score", f1)
+            mlflow.log_metric("roc_auc", roc_auc)
+            mlflow.log_metric("precision", report["1"]["precision"])
+            mlflow.log_metric("recall", report["1"]["recall"])
+            mlflow.sklearn.log_model(model, artifact_path="model")
+            logger.info(f"MLflow run logged for {model_name}")
+    except Exception as e:
+        logger.warning(f"MLflow logging failed for {model_name}: {e}")
+        logger.info("Model was still trained and saved locally")
 
     return model, {"accuracy": accuracy, "f1_score": f1, "roc_auc": roc_auc}
 
