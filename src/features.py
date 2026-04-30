@@ -38,16 +38,18 @@ def clean_data(df: pd.DataFrame) -> pd.DataFrame:
         df = df.drop(columns=["customerID"])
 
     # Convert TotalCharges to numeric (contains spaces as missing values)
-    df["TotalCharges"] = pd.to_numeric(df["TotalCharges"], errors="coerce")
+    if "TotalCharges" in df.columns:
+        df["TotalCharges"] = pd.to_numeric(df["TotalCharges"], errors="coerce")
 
-    # Handle missing values in TotalCharges (typically new customers with tenure=0)
-    missing_total_charges = df["TotalCharges"].isna().sum()
-    if missing_total_charges > 0:
-        logger.info(f"Filling {missing_total_charges} missing TotalCharges with 0")
-        df["TotalCharges"] = df["TotalCharges"].fillna(0)
+        # Handle missing values in TotalCharges (typically new customers with tenure=0)
+        missing_total_charges = df["TotalCharges"].isna().sum()
+        if missing_total_charges > 0:
+            logger.info(f"Filling {missing_total_charges} missing TotalCharges with 0")
+            df["TotalCharges"] = df["TotalCharges"].fillna(0)
 
     # Convert SeniorCitizen to string to treat as categorical
-    df["SeniorCitizen"] = df["SeniorCitizen"].astype(str)
+    if "SeniorCitizen" in df.columns:
+        df["SeniorCitizen"] = df["SeniorCitizen"].astype(str)
 
     logger.info("Data cleaning completed")
     return df
