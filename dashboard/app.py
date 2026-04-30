@@ -44,82 +44,121 @@ with tab1:
 
     # Demographics
     gender = st.sidebar.selectbox(
-        "Gender", ["Male", "Female"],
-        index=1 if sf and sf.get("gender") == "Female" else 0
+        "Gender",
+        ["Male", "Female"],
+        index=1 if sf and sf.get("gender") == "Female" else 0,
     )
     senior = st.sidebar.selectbox(
-        "Senior Citizen", [0, 1],
+        "Senior Citizen",
+        [0, 1],
         format_func=lambda x: "Yes" if x == 1 else "No",
-        index=sf.get("SeniorCitizen", 0) if sf else 0
+        index=sf.get("SeniorCitizen", 0) if sf else 0,
     )
     partner = st.sidebar.selectbox(
-        "Partner", ["Yes", "No"],
-        index=1 if sf and sf.get("Partner") == "No" else 0
+        "Partner", ["Yes", "No"], index=1 if sf and sf.get("Partner") == "No" else 0
     )
     dependents = st.sidebar.selectbox(
-        "Dependents", ["Yes", "No"],
-        index=1 if sf and sf.get("Dependents") == "No" else 0
+        "Dependents",
+        ["Yes", "No"],
+        index=1 if sf and sf.get("Dependents") == "No" else 0,
     )
 
     # Services
     tenure = st.sidebar.slider(
-        "Tenure (months)", 0, 100,
-        sf.get("tenure", 12) if sf else 12
+        "Tenure (months)", 0, 100, sf.get("tenure", 12) if sf else 12
     )
     phone_service = st.sidebar.selectbox(
-        "Phone Service", ["Yes", "No"],
-        index=1 if sf and sf.get("PhoneService") == "No" else 0
+        "Phone Service",
+        ["Yes", "No"],
+        index=1 if sf and sf.get("PhoneService") == "No" else 0,
     )
     multiple_lines = st.sidebar.selectbox(
-        "Multiple Lines", ["Yes", "No", "No phone service"],
-        index=2 if sf and sf.get("MultipleLines") == "No phone service"
-        else (1 if sf and sf.get("MultipleLines") == "No" else 0)
+        "Multiple Lines",
+        ["Yes", "No", "No phone service"],
+        index=(
+            2
+            if sf and sf.get("MultipleLines") == "No phone service"
+            else (1 if sf and sf.get("MultipleLines") == "No" else 0)
+        ),
     )
     internet_service = st.sidebar.selectbox(
-        "Internet Service", ["DSL", "Fiber optic", "No"],
-        index=2 if sf and sf.get("InternetService") == "No"
-        else (1 if sf and sf.get("InternetService") == "Fiber optic" else 0)
+        "Internet Service",
+        ["DSL", "Fiber optic", "No"],
+        index=(
+            2
+            if sf and sf.get("InternetService") == "No"
+            else (1 if sf and sf.get("InternetService") == "Fiber optic" else 0)
+        ),
     )
     online_security = st.sidebar.selectbox(
-        "Online Security", ["Yes", "No", "No internet service"],
-        index=2 if sf and sf.get("OnlineSecurity") == "No internet service"
-        else (1 if sf and sf.get("OnlineSecurity") == "No" else 0)
+        "Online Security",
+        ["Yes", "No", "No internet service"],
+        index=(
+            2
+            if sf and sf.get("OnlineSecurity") == "No internet service"
+            else (1 if sf and sf.get("OnlineSecurity") == "No" else 0)
+        ),
     )
     online_backup = st.sidebar.selectbox(
-        "Online Backup", ["Yes", "No", "No internet service"],
-        index=2 if sf and sf.get("OnlineBackup") == "No internet service"
-        else (1 if sf and sf.get("OnlineBackup") == "No" else 0)
+        "Online Backup",
+        ["Yes", "No", "No internet service"],
+        index=(
+            2
+            if sf and sf.get("OnlineBackup") == "No internet service"
+            else (1 if sf and sf.get("OnlineBackup") == "No" else 0)
+        ),
     )
     device_protection = st.sidebar.selectbox(
-        "Device Protection", ["Yes", "No", "No internet service"],
-        index=2 if sf and sf.get("DeviceProtection") == "No internet service"
-        else (1 if sf and sf.get("DeviceProtection") == "No" else 0)
+        "Device Protection",
+        ["Yes", "No", "No internet service"],
+        index=(
+            2
+            if sf and sf.get("DeviceProtection") == "No internet service"
+            else (1 if sf and sf.get("DeviceProtection") == "No" else 0)
+        ),
     )
     tech_support = st.sidebar.selectbox(
-        "Tech Support", ["Yes", "No", "No internet service"],
-        index=2 if sf and sf.get("TechSupport") == "No internet service"
-        else (1 if sf and sf.get("TechSupport") == "No" else 0)
+        "Tech Support",
+        ["Yes", "No", "No internet service"],
+        index=(
+            2
+            if sf and sf.get("TechSupport") == "No internet service"
+            else (1 if sf and sf.get("TechSupport") == "No" else 0)
+        ),
     )
     streaming_tv = st.sidebar.selectbox(
-        "Streaming TV", ["Yes", "No", "No internet service"],
-        index=2 if sf and sf.get("StreamingTV") == "No internet service"
-        else (1 if sf and sf.get("StreamingTV") == "No" else 0)
+        "Streaming TV",
+        ["Yes", "No", "No internet service"],
+        index=(
+            2
+            if sf and sf.get("StreamingTV") == "No internet service"
+            else (1 if sf and sf.get("StreamingTV") == "No" else 0)
+        ),
     )
     streaming_movies = st.sidebar.selectbox(
-        "Streaming Movies", ["Yes", "No", "No internet service"],
-        index=2 if sf and sf.get("StreamingMovies") == "No internet service"
-        else (1 if sf and sf.get("StreamingMovies") == "No" else 0)
+        "Streaming Movies",
+        ["Yes", "No", "No internet service"],
+        index=(
+            2
+            if sf and sf.get("StreamingMovies") == "No internet service"
+            else (1 if sf and sf.get("StreamingMovies") == "No" else 0)
+        ),
     )
 
     # Billing
     contract = st.sidebar.selectbox(
-        "Contract", ["Month-to-month", "One year", "Two year"],
-        index=2 if sf and sf.get("Contract") == "Two year"
-        else (1 if sf and sf.get("Contract") == "One year" else 0)
+        "Contract",
+        ["Month-to-month", "One year", "Two year"],
+        index=(
+            2
+            if sf and sf.get("Contract") == "Two year"
+            else (1 if sf and sf.get("Contract") == "One year" else 0)
+        ),
     )
     paperless = st.sidebar.selectbox(
-        "Paperless Billing", ["Yes", "No"],
-        index=1 if sf and sf.get("PaperlessBilling") == "No" else 0
+        "Paperless Billing",
+        ["Yes", "No"],
+        index=1 if sf and sf.get("PaperlessBilling") == "No" else 0,
     )
     payment_method = st.sidebar.selectbox(
         "Payment Method",
@@ -129,17 +168,27 @@ with tab1:
             "Bank transfer (automatic)",
             "Credit card (automatic)",
         ],
-        index=3 if sf and sf.get("PaymentMethod") == "Credit card (automatic)"
-        else (2 if sf and sf.get("PaymentMethod") == "Bank transfer (automatic)"
-              else (1 if sf and sf.get("PaymentMethod") == "Mailed check" else 0))
+        index=(
+            3
+            if sf and sf.get("PaymentMethod") == "Credit card (automatic)"
+            else (
+                2
+                if sf and sf.get("PaymentMethod") == "Bank transfer (automatic)"
+                else (1 if sf and sf.get("PaymentMethod") == "Mailed check" else 0)
+            )
+        ),
     )
     monthly_charges = st.sidebar.slider(
-        "Monthly Charges ($)", 0.0, 150.0,
-        float(sf.get("MonthlyCharges", 70.0)) if sf else 70.0
+        "Monthly Charges ($)",
+        0.0,
+        150.0,
+        float(sf.get("MonthlyCharges", 70.0)) if sf else 70.0,
     )
     total_charges = st.sidebar.slider(
-        "Total Charges ($)", 0.0, 9000.0,
-        float(sf.get("TotalCharges", 1000.0)) if sf else 1000.0
+        "Total Charges ($)",
+        0.0,
+        9000.0,
+        float(sf.get("TotalCharges", 1000.0)) if sf else 1000.0,
     )
 
     # Prediction button
@@ -174,16 +223,12 @@ with tab1:
             with col1:
                 st.metric("Churn Prediction", result["churn_label"])
             with col2:
-                st.metric(
-                    "Churn Probability", f"{result['churn_probability']:.2%}"
-                )
+                st.metric("Churn Probability", f"{result['churn_probability']:.2%}")
             with col3:
                 risk = (
                     "High"
                     if result["churn_probability"] > 0.5
-                    else "Medium"
-                    if result["churn_probability"] > 0.3
-                    else "Low"
+                    else "Medium" if result["churn_probability"] > 0.3 else "Low"
                 )
                 st.metric("Risk Level", risk)
 
@@ -208,7 +253,9 @@ with tab2:
     with col1:
         st.subheader("Built-in Dataset")
         st.markdown("Run predictions on all **7,043 customers** in the dataset.")
-        if st.button("🔮 Analyze All Customers", type="primary", use_container_width=True):
+        if st.button(
+            "🔮 Analyze All Customers", type="primary", use_container_width=True
+        ):
             with st.spinner("Processing all customers..."):
                 try:
                     response = requests.post(f"{API_URL}/predict/batch/dataset")
@@ -216,9 +263,13 @@ with tab2:
                         data = response.json()
                         results_df = pd.DataFrame(data["predictions"])
                         st.session_state.prediction_results = results_df
-                        st.success(f"Predictions complete for {len(results_df)} customers!")
+                        st.success(
+                            f"Predictions complete for {len(results_df)} customers!"
+                        )
                     else:
-                        st.error(f"API Error: {response.json().get('detail', 'Unknown error')}")
+                        st.error(
+                            f"API Error: {response.json().get('detail', 'Unknown error')}"
+                        )
                 except Exception as e:
                     st.error(f"Error: {e}")
 
@@ -232,23 +283,42 @@ with tab2:
             st.info(f"Total rows: {len(df_preview)}")
 
             required_cols = [
-                "gender", "SeniorCitizen", "Partner", "Dependents", "tenure",
-                "PhoneService", "MultipleLines", "InternetService",
-                "OnlineSecurity", "OnlineBackup", "DeviceProtection",
-                "TechSupport", "StreamingTV", "StreamingMovies",
-                "Contract", "PaperlessBilling", "PaymentMethod",
-                "MonthlyCharges", "TotalCharges",
+                "gender",
+                "SeniorCitizen",
+                "Partner",
+                "Dependents",
+                "tenure",
+                "PhoneService",
+                "MultipleLines",
+                "InternetService",
+                "OnlineSecurity",
+                "OnlineBackup",
+                "DeviceProtection",
+                "TechSupport",
+                "StreamingTV",
+                "StreamingMovies",
+                "Contract",
+                "PaperlessBilling",
+                "PaymentMethod",
+                "MonthlyCharges",
+                "TotalCharges",
             ]
-            missing_cols = [col for col in required_cols if col not in df_preview.columns]
+            missing_cols = [
+                col for col in required_cols if col not in df_preview.columns
+            ]
 
             if missing_cols:
                 st.error(f"Missing required columns: {', '.join(missing_cols)}")
             else:
-                if st.button("🔮 Run Predictions", type="primary", use_container_width=True):
+                if st.button(
+                    "🔮 Run Predictions", type="primary", use_container_width=True
+                ):
                     with st.spinner("Processing predictions..."):
                         try:
                             uploaded_file.seek(0)
-                            files = {"file": ("customers.csv", uploaded_file, "text/csv")}
+                            files = {
+                                "file": ("customers.csv", uploaded_file, "text/csv")
+                            }
                             response = requests.post(
                                 f"{API_URL}/predict/batch/csv", files=files
                             )
@@ -258,9 +328,13 @@ with tab2:
                                     io.StringIO(response.content.decode("utf-8"))
                                 )
                                 st.session_state.prediction_results = results_df
-                                st.success(f"Predictions complete for {len(results_df)} customers!")
+                                st.success(
+                                    f"Predictions complete for {len(results_df)} customers!"
+                                )
                             else:
-                                st.error(f"API Error: {response.json().get('detail', 'Unknown error')}")
+                                st.error(
+                                    f"API Error: {response.json().get('detail', 'Unknown error')}"
+                                )
                         except Exception as e:
                             st.error(f"Error processing predictions: {e}")
 
@@ -299,13 +373,25 @@ with tab2:
         # Search/filter
         search_term = st.text_input("Search by customerID", "")
         if search_term:
-            filtered_df = results_df[results_df["customerID"].astype(str).str.contains(search_term, case=False, na=False)]
+            filtered_df = results_df[
+                results_df["customerID"]
+                .astype(str)
+                .str.contains(search_term, case=False, na=False)
+            ]
         else:
             filtered_df = results_df
 
         st.dataframe(
             filtered_df,
-            column_order=["customerID", "churn_label", "churn_probability", "risk_level", "tenure", "Contract", "MonthlyCharges"],
+            column_order=[
+                "customerID",
+                "churn_label",
+                "churn_probability",
+                "risk_level",
+                "tenure",
+                "Contract",
+                "MonthlyCharges",
+            ],
             use_container_width=True,
             hide_index=True,
         )
@@ -313,7 +399,9 @@ with tab2:
         # Customer selection for details
         st.subheader("Select Customer for Details")
         customer_options = filtered_df["customerID"].tolist()
-        selected_id = st.selectbox("Choose a customer", customer_options, index=0 if customer_options else None)
+        selected_id = st.selectbox(
+            "Choose a customer", customer_options, index=0 if customer_options else None
+        )
 
         if selected_id and st.button("👤 View Details", type="primary"):
             st.session_state.selected_customer = selected_id
@@ -355,7 +443,10 @@ with tab3:
                             with c1:
                                 st.metric("Churn", customer["churn_label"])
                             with c2:
-                                st.metric("Probability", f"{customer['churn_probability']:.2%}")
+                                st.metric(
+                                    "Probability",
+                                    f"{customer['churn_probability']:.2%}",
+                                )
                             with c3:
                                 st.metric("Risk", customer["risk_level"])
 
@@ -369,7 +460,14 @@ with tab3:
                             with c1:
                                 st.metric("Gender", customer["gender"])
                             with c2:
-                                st.metric("Senior", "Yes" if customer["SeniorCitizen"] in ["1", 1, "Yes"] else "No")
+                                st.metric(
+                                    "Senior",
+                                    (
+                                        "Yes"
+                                        if customer["SeniorCitizen"] in ["1", 1, "Yes"]
+                                        else "No"
+                                    ),
+                                )
                             with c3:
                                 st.metric("Partner", customer["Partner"])
                             with c4:
@@ -410,17 +508,25 @@ with tab3:
                     with col2:
                         st.subheader("Actions")
 
-                        if st.button("🔮 Predict in Single Mode", type="primary", use_container_width=True):
+                        if st.button(
+                            "🔮 Predict in Single Mode",
+                            type="primary",
+                            use_container_width=True,
+                        ):
                             st.session_state.selected_features = customer
                             st.session_state.selected_customer = None
                             st.rerun()
 
-                        if st.button("⬅️ Back to Batch Results", use_container_width=True):
+                        if st.button(
+                            "⬅️ Back to Batch Results", use_container_width=True
+                        ):
                             st.session_state.selected_customer = None
                             st.rerun()
 
                 else:
-                    st.error(f"API Error: {response.json().get('detail', 'Unknown error')}")
+                    st.error(
+                        f"API Error: {response.json().get('detail', 'Unknown error')}"
+                    )
             except Exception as e:
                 st.error(f"Error loading customer details: {e}")
     else:

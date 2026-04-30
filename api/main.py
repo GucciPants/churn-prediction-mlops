@@ -2,6 +2,7 @@
 
 import io
 import pickle
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -13,13 +14,7 @@ from pydantic import BaseModel, Field
 # Load model and scaler
 MODELS_DIR = Path(__file__).resolve().parent.parent / "models"
 
-app = FastAPI(
-    title="Churn Prediction API",
-    description="Predict customer churn based on telecom features",
-    version="1.0.0",
-)
-
-# Load artifacts on startup
+# Global artifacts
 model = None
 scaler = None
 
@@ -47,9 +42,19 @@ def load_artifacts():
         scaler = pickle.load(f)
 
 
-@app.on_event("startup")
-async def startup_event():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan handler."""
     load_artifacts()
+    yield
+
+
+app = FastAPI(
+    title="Churn Prediction API",
+    description="Predict customer churn based on telecom features",
+    version="1.0.0",
+    lifespan=lifespan,
+)
 
 
 class CustomerData(BaseModel):
@@ -75,7 +80,7 @@ class CustomerData(BaseModel):
     PaperlessBilling: str = Field(..., pattern="^(Yes|No)$")
     PaymentMethod: str = Field(
         ...,
-        pattern="^(Electronic check|Mailed check|Bank transfer \(automatic\)|Credit card \(automatic\))$",
+        pattern=r"^(Electronic check|Mailed check|Bank transfer \(automatic\)|Credit card \(automatic\))$",
     )
 
 
@@ -210,22 +215,38 @@ async def predict_batch_csv(file: UploadFile = File(...)):
 
         # Validate required columns
         required_cols = [
-            "gender", "SeniorCitizen", "Partner", "Dependents", "tenure",
-            "PhoneService", "MultipleLines", "InternetService", "OnlineSecurity",
-            "OnlineBackup", "DeviceProtection", "TechSupport", "StreamingTV",
-            "StreamingMovies", "Contract", "PaperlessBilling", "PaymentMethod",
-            "MonthlyCharges", "TotalCharges",
+            "gender",
+            "SeniorCitizen",
+            "Partner",
+            "Dependents",
+            "tenure",
+            "PhoneService",
+            "MultipleLines",
+            "InternetService",
+            "OnlineSecurity",
+            "OnlineBackup",
+            "DeviceProtection",
+            "TechSupport",
+            "StreamingTV",
+            "StreamingMovies",
+            "Contract",
+            "PaperlessBilling",
+            "PaymentMethod",
+            "MonthlyCharges",
+            "TotalCharges",
         ]
         missing_cols = [col for col in required_cols if col not in df.columns]
         if missing_cols:
             raise HTTPException(
                 status_code=400,
-                detail=f"Missing required columns: {', '.join(missing_cols)}"
+                detail=f"Missing required columns: {', '.join(missing_cols)}",
             )
 
         # Clean data (handle TotalCharges spaces, etc.)
         df_clean = df.copy()
-        df_clean["TotalCharges"] = pd.to_numeric(df_clean["TotalCharges"], errors="coerce")
+        df_clean["TotalCharges"] = pd.to_numeric(
+            df_clean["TotalCharges"], errors="coerce"
+        )
         df_clean["TotalCharges"] = df_clean["TotalCharges"].fillna(0)
         df_clean["SeniorCitizen"] = df_clean["SeniorCitizen"].astype(str)
 
@@ -243,9 +264,16 @@ async def predict_batch_csv(file: UploadFile = File(...)):
 
         # One-hot encode categoricals
         cat_cols = [
-            "MultipleLines", "InternetService", "OnlineSecurity", "OnlineBackup",
-            "DeviceProtection", "TechSupport", "StreamingTV", "StreamingMovies",
-            "Contract", "PaymentMethod",
+            "MultipleLines",
+            "InternetService",
+            "OnlineSecurity",
+            "OnlineBackup",
+            "DeviceProtection",
+            "TechSupport",
+            "StreamingTV",
+            "StreamingMovies",
+            "Contract",
+            "PaymentMethod",
         ]
         df_encoded = pd.get_dummies(df_clean, columns=cat_cols, drop_first=True)
 
@@ -267,12 +295,16 @@ async def predict_batch_csv(file: UploadFile = File(...)):
         # Build results
         results = []
         for prob, pred in zip(probs, preds):
-            results.append({
-                "churn_probability": round(float(prob), 4),
-                "churn_prediction": int(pred),
-                "churn_label": "Yes" if pred == 1 else "No",
-                "risk_level": "High" if prob > 0.5 else "Medium" if prob > 0.3 else "Low",
-            })
+            results.append(
+                {
+                    "churn_probability": round(float(prob), 4),
+                    "churn_prediction": int(pred),
+                    "churn_label": "Yes" if pred == 1 else "No",
+                    "risk_level": (
+                        "High" if prob > 0.5 else "Medium" if prob > 0.3 else "Low"
+                    ),
+                }
+            )
 
         # Add results to original dataframe
         results_df = pd.DataFrame(results)
@@ -286,7 +318,7 @@ async def predict_batch_csv(file: UploadFile = File(...)):
         return StreamingResponse(
             io.BytesIO(output.getvalue().encode()),
             media_type="text/csv",
-            headers={"Content-Disposition": "attachment; filename=predictions.csv"}
+            headers={"Content-Disposition": "attachment; filename=predictions.csv"},
         )
 
     except HTTPException:
@@ -314,9 +346,16 @@ def run_predictions(df: pd.DataFrame) -> pd.DataFrame:
             df_clean[col] = df_clean[col].map(mapping)
 
     cat_cols = [
-        "MultipleLines", "InternetService", "OnlineSecurity", "OnlineBackup",
-        "DeviceProtection", "TechSupport", "StreamingTV", "StreamingMovies",
-        "Contract", "PaymentMethod",
+        "MultipleLines",
+        "InternetService",
+        "OnlineSecurity",
+        "OnlineBackup",
+        "DeviceProtection",
+        "TechSupport",
+        "StreamingTV",
+        "StreamingMovies",
+        "Contract",
+        "PaymentMethod",
     ]
     df_encoded = pd.get_dummies(df_clean, columns=cat_cols, drop_first=True)
 
@@ -334,12 +373,16 @@ def run_predictions(df: pd.DataFrame) -> pd.DataFrame:
 
     results = []
     for prob, pred in zip(probs, preds):
-        results.append({
-            "churn_probability": round(float(prob), 4),
-            "churn_prediction": int(pred),
-            "churn_label": "Yes" if pred == 1 else "No",
-            "risk_level": "High" if prob > 0.5 else "Medium" if prob > 0.3 else "Low",
-        })
+        results.append(
+            {
+                "churn_probability": round(float(prob), 4),
+                "churn_prediction": int(pred),
+                "churn_label": "Yes" if pred == 1 else "No",
+                "risk_level": (
+                    "High" if prob > 0.5 else "Medium" if prob > 0.3 else "Low"
+                ),
+            }
+        )
 
     results_df = pd.DataFrame(results)
     return pd.concat([df.reset_index(drop=True), results_df], axis=1)
@@ -384,7 +427,9 @@ async def get_customer_prediction(customer_id: str):
         customer_df = df[df["customerID"] == customer_id]
 
         if customer_df.empty:
-            raise HTTPException(status_code=404, detail=f"Customer {customer_id} not found")
+            raise HTTPException(
+                status_code=404, detail=f"Customer {customer_id} not found"
+            )
 
         output_df = run_predictions(customer_df)
         record = output_df.iloc[0].to_dict()
