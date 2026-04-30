@@ -20,7 +20,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY src/ src/
 COPY api/ api/
-COPY models/ models/
+# Note: models/ directory is created above and mounted as volume at runtime
 
 # Expose port
 EXPOSE 8000
