@@ -22,10 +22,11 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
+        pip install pytest-cov
     
-    - name: Run tests
+    - name: Run tests with coverage
       run: |
-        pytest tests/ -v
+        pytest tests/ -v --cov=src --cov=api --cov-report=term-missing --cov-report=html
     
     - name: Check code formatting
       run: |
@@ -39,3 +40,10 @@ jobs:
     - name: Build Dashboard Docker image
       run: |
         docker build -f Dockerfile.dashboard -t churn-prediction-dashboard .
+    
+    - name: Upload coverage report
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-report
+        path: htmlcov/

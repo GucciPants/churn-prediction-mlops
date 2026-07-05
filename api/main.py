@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 from src.explainer import explain_prediction, load_explainer
+from src.preprocessing import preprocess_batch_csv, preprocess_for_inference
 
 # Load model and scaler
 MODELS_DIR = Path(__file__).resolve().parent.parent / "models"
@@ -23,47 +24,61 @@ model = None
 model_xgb = None
 scaler = None
 explainer = None
+expected_columns = None
 
 
 def load_artifacts():
-    """Load trained models, scaler, and SHAP explainer."""
-    global model, model_xgb, scaler, explainer
+    """Load trained models, scaler, and SHAP explainer.
 
-    # Load Random Forest
+    Raises:
+        FileNotFoundError: If required model files are not found.
+    """
+    global model, model_xgb, scaler, explainer, expected_columns
+
     model_path = MODELS_DIR / "random_forest.pkl"
     scaler_path = MODELS_DIR / "scaler.pkl"
     explainer_path = MODELS_DIR / "random_forest_explainer.pkl"
 
+    # Check required files exist
+    missing = []
     if not model_path.exists():
-        print(
-            f"WARNING: Model not found at {model_path}. Predictions will not work until training is run."
-        )
-        return
+        missing.append(str(model_path))
     if not scaler_path.exists():
-        print(
-            f"WARNING: Scaler not found at {scaler_path}. Predictions will not work until training is run."
-        )
-        return
+        missing.append(str(scaler_path))
 
+    if missing:
+        raise FileNotFoundError(
+            f"Required model files not found. Please run training first: {missing}"
+        )
+
+    # Load Random Forest
     with open(model_path, "rb") as f:
         model = pickle.load(f)
+    logger.info(f"Loaded Random Forest model from {model_path}")
+
+    # Load scaler
     with open(scaler_path, "rb") as f:
         scaler = pickle.load(f)
+    logger.info(f"Loaded scaler from {scaler_path}")
 
+    # Store expected columns from model
+    expected_columns = list(model.feature_names_in_)
+
+    # Load SHAP explainer (optional)
     explainer = load_explainer(explainer_path)
     if explainer is None:
-        print(
-            f"WARNING: SHAP explainer not found at {explainer_path}. Explanations will not work."
-        )
+        logger.warning(f"SHAP explainer not found at {explainer_path}. Explanations disabled.")
+    else:
+        logger.info(f"Loaded SHAP explainer from {explainer_path}")
 
     # Load XGBoost (optional - for comparison)
     xgb_path = MODELS_DIR / "xgboost.pkl"
     if xgb_path.exists():
         with open(xgb_path, "rb") as f:
             model_xgb = pickle.load(f)
-        print("XGBoost model loaded for comparison")
+        logger.info("Loaded XGBoost model for comparison")
     else:
-        print("WARNING: XGBoost model not found. Comparison features disabled.")
+        logger.warning("XGBoost model not found. Comparison features disabled.")
 
 
 @asynccontextmanager
@@ -128,64 +143,25 @@ class BatchPredictionResponse(BaseModel):
     predictions: List[PredictionResponse]
 
 
-def preprocess_input(data: Dict[str, Any]) -> pd.DataFrame:
-    """Preprocess input data for prediction."""
-    df = pd.DataFrame([data])
-
-    # Encode binary
-    binary_mappings = {
-        "gender": {"Female": 0, "Male": 1},
-        "Partner": {"No": 0, "Yes": 1},
-        "Dependents": {"No": 0, "Yes": 1},
-        "PhoneService": {"No": 0, "Yes": 1},
-        "PaperlessBilling": {"No": 0, "Yes": 1},
-    }
-    for col, mapping in binary_mappings.items():
-        df[col] = df[col].map(mapping)
-
-    # One-hot encode categoricals
-    cat_cols = [
-        "MultipleLines",
-        "InternetService",
-        "OnlineSecurity",
-        "OnlineBackup",
-        "DeviceProtection",
-        "TechSupport",
-        "StreamingTV",
-        "StreamingMovies",
-        "Contract",
-        "PaymentMethod",
-    ]
-    df = pd.get_dummies(df, columns=cat_cols, drop_first=True)
-
-    # Align columns with training data
-    expected_cols = list(model.feature_names_in_)
-    for col in expected_cols:
-        if col not in df.columns:
-            df[col] = 0
-    df = df[expected_cols]
-
-    # Scale numeric
-    numeric_cols = ["tenure", "MonthlyCharges", "TotalCharges"]
-    df[numeric_cols] = scaler.transform(df[numeric_cols])
-
-    return df
-
-
 @app.get("/health", tags=["Health"])
 async def health_check():
     """Health check endpoint."""
-    return {"status": "healthy", "model_loaded": model is not None}
+    return {
+        "status": "healthy",
+        "model_loaded": model is not None,
+        "scaler_loaded": scaler is not None,
+        "explainer_loaded": explainer is not None,
+    }
 
 
 @app.post("/predict", response_model=PredictionResponse, tags=["Predictions"])
 async def predict(customer: CustomerData):
     """Predict churn for a single customer."""
-    if model is None:
-        raise HTTPException(status_code=500, detail="Model not loaded")
+    if model is None or scaler is None:
+        raise HTTPException(status_code=500, detail="Model or scaler not loaded")
 
     try:
-        input_df = preprocess_input(customer.dict())
+        input_df = preprocess_for_inference(customer.dict(), expected_columns, scaler)
         prob = model.predict_proba(input_df)[0, 1]
         pred = model.predict(input_df)[0]
 
@@ -199,15 +175,15 @@ async def predict(customer: CustomerData):
 
 
 @app.post("/predict/explain", tags=["Predictions"])
-async def explain(customer: CustomerData):
+async def predict_explain(customer: CustomerData):
     """Explain a churn prediction with SHAP values."""
-    if model is None:
-        raise HTTPException(status_code=500, detail="Model not loaded")
+    if model is None or scaler is None:
+        raise HTTPException(status_code=500, detail="Model or scaler not loaded")
     if explainer is None:
         raise HTTPException(status_code=500, detail="SHAP explainer not loaded")
 
     try:
-        input_df = preprocess_input(customer.dict())
+        input_df = preprocess_for_inference(customer.dict(), expected_columns, scaler)
         explanation = explain_prediction(explainer, input_df)
 
         # Also get the prediction
@@ -229,13 +205,13 @@ async def explain(customer: CustomerData):
 @app.post("/predict/compare", tags=["Predictions"])
 async def compare_models(customer: CustomerData):
     """Compare predictions between RandomForest and XGBoost models."""
-    if model is None:
+    if model is None or scaler is None:
         raise HTTPException(status_code=500, detail="RandomForest model not loaded")
     if model_xgb is None:
         raise HTTPException(status_code=500, detail="XGBoost model not loaded")
 
     try:
-        input_df = preprocess_input(customer.dict())
+        input_df = preprocess_for_inference(customer.dict(), expected_columns, scaler)
 
         # RandomForest prediction
         rf_prob = model.predict_proba(input_df)[0, 1]
@@ -270,18 +246,16 @@ async def compare_models(customer: CustomerData):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post(
-    "/predict/batch", response_model=BatchPredictionResponse, tags=["Predictions"]
-)
+@app.post("/predict/batch", response_model=BatchPredictionResponse, tags=["Predictions"])
 async def predict_batch(batch: BatchPredictionInput):
     """Predict churn for multiple customers."""
-    if model is None:
-        raise HTTPException(status_code=500, detail="Model not loaded")
+    if model is None or scaler is None:
+        raise HTTPException(status_code=500, detail="Model or scaler not loaded")
 
     predictions = []
     try:
         for customer in batch.customers:
-            input_df = preprocess_input(customer.dict())
+            input_df = preprocess_for_inference(customer.dict(), expected_columns, scaler)
             prob = model.predict_proba(input_df)[0, 1]
             pred = model.predict(input_df)[0]
 
@@ -301,8 +275,8 @@ async def predict_batch(batch: BatchPredictionInput):
 @app.post("/predict/batch/csv", tags=["Predictions"])
 async def predict_batch_csv(file: UploadFile = File(...)):
     """Predict churn for multiple customers from CSV file."""
-    if model is None:
-        raise HTTPException(status_code=500, detail="Model not loaded")
+    if model is None or scaler is None:
+        raise HTTPException(status_code=500, detail="Model or scaler not loaded")
 
     try:
         # Read CSV
@@ -311,25 +285,11 @@ async def predict_batch_csv(file: UploadFile = File(...)):
 
         # Validate required columns
         required_cols = [
-            "gender",
-            "SeniorCitizen",
-            "Partner",
-            "Dependents",
-            "tenure",
-            "PhoneService",
-            "MultipleLines",
-            "InternetService",
-            "OnlineSecurity",
-            "OnlineBackup",
-            "DeviceProtection",
-            "TechSupport",
-            "StreamingTV",
-            "StreamingMovies",
-            "Contract",
-            "PaperlessBilling",
-            "PaymentMethod",
-            "MonthlyCharges",
-            "TotalCharges",
+            "gender", "SeniorCitizen", "Partner", "Dependents", "tenure",
+            "PhoneService", "MultipleLines", "InternetService", "OnlineSecurity",
+            "OnlineBackup", "DeviceProtection", "TechSupport", "StreamingTV",
+            "StreamingMovies", "Contract", "PaperlessBilling", "PaymentMethod",
+            "MonthlyCharges", "TotalCharges",
         ]
         missing_cols = [col for col in required_cols if col not in df.columns]
         if missing_cols:
@@ -338,69 +298,24 @@ async def predict_batch_csv(file: UploadFile = File(...)):
                 detail=f"Missing required columns: {', '.join(missing_cols)}",
             )
 
-        # Clean data (handle TotalCharges spaces, etc.)
-        df_clean = df.copy()
-        df_clean["TotalCharges"] = pd.to_numeric(
-            df_clean["TotalCharges"], errors="coerce"
-        )
-        df_clean["TotalCharges"] = df_clean["TotalCharges"].fillna(0)
-        df_clean["SeniorCitizen"] = df_clean["SeniorCitizen"].astype(str)
-
-        # Encode binary features
-        binary_mappings = {
-            "gender": {"Female": 0, "Male": 1},
-            "Partner": {"No": 0, "Yes": 1},
-            "Dependents": {"No": 0, "Yes": 1},
-            "PhoneService": {"No": 0, "Yes": 1},
-            "PaperlessBilling": {"No": 0, "Yes": 1},
-        }
-        for col, mapping in binary_mappings.items():
-            if col in df_clean.columns:
-                df_clean[col] = df_clean[col].map(mapping)
-
-        # One-hot encode categoricals
-        cat_cols = [
-            "MultipleLines",
-            "InternetService",
-            "OnlineSecurity",
-            "OnlineBackup",
-            "DeviceProtection",
-            "TechSupport",
-            "StreamingTV",
-            "StreamingMovies",
-            "Contract",
-            "PaymentMethod",
-        ]
-        df_encoded = pd.get_dummies(df_clean, columns=cat_cols, drop_first=True)
-
-        # Align columns with training data
-        expected_cols = list(model.feature_names_in_)
-        for col in expected_cols:
-            if col not in df_encoded.columns:
-                df_encoded[col] = 0
-        df_encoded = df_encoded[expected_cols]
-
-        # Scale numeric
-        numeric_cols = ["tenure", "MonthlyCharges", "TotalCharges"]
-        df_encoded[numeric_cols] = scaler.transform(df_encoded[numeric_cols])
+        # Use shared preprocessing
+        df_processed = preprocess_batch_csv(df, expected_columns, scaler)
 
         # Predict for all rows
-        probs = model.predict_proba(df_encoded)[:, 1]
-        preds = model.predict(df_encoded)
+        probs = model.predict_proba(df_processed)[:, 1]
+        preds = model.predict(df_processed)
 
         # Build results
         results = []
         for prob, pred in zip(probs, preds):
-            results.append(
-                {
-                    "churn_probability": round(float(prob), 4),
-                    "churn_prediction": int(pred),
-                    "churn_label": "Yes" if pred == 1 else "No",
-                    "risk_level": (
-                        "High" if prob > 0.5 else "Medium" if prob > 0.3 else "Low"
-                    ),
-                }
-            )
+            results.append({
+                "churn_probability": round(float(prob), 4),
+                "churn_prediction": int(pred),
+                "churn_label": "Yes" if pred == 1 else "No",
+                "risk_level": (
+                    "High" if prob > 0.5 else "Medium" if prob > 0.3 else "Low"
+                ),
+            })
 
         # Add results to original dataframe
         results_df = pd.DataFrame(results)
@@ -423,80 +338,38 @@ async def predict_batch_csv(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-def run_predictions(df: pd.DataFrame) -> pd.DataFrame:
-    """Run batch predictions on a dataframe."""
-    df_clean = df.copy()
-    df_clean["TotalCharges"] = pd.to_numeric(df_clean["TotalCharges"], errors="coerce")
-    df_clean["TotalCharges"] = df_clean["TotalCharges"].fillna(0)
-    df_clean["SeniorCitizen"] = df_clean["SeniorCitizen"].astype(str)
+@app.post("/predict/batch/dataset", tags=["Predictions"])
+async def predict_batch_dataset():
+    """Predict churn for all customers in the built-in dataset."""
+    if model is None or scaler is None:
+        raise HTTPException(status_code=500, detail="Model or scaler not loaded")
 
-    binary_mappings = {
-        "gender": {"Female": 0, "Male": 1},
-        "Partner": {"No": 0, "Yes": 1},
-        "Dependents": {"No": 0, "Yes": 1},
-        "PhoneService": {"No": 0, "Yes": 1},
-        "PaperlessBilling": {"No": 0, "Yes": 1},
-    }
-    for col, mapping in binary_mappings.items():
-        if col in df_clean.columns:
-            df_clean[col] = df_clean[col].map(mapping)
+    try:
+        dataset_path = Path("data/raw/WA_Fn-UseC_-Telco-Customer-Churn.csv")
+        if not dataset_path.exists():
+            raise HTTPException(status_code=404, detail="Built-in dataset not found")
 
-    cat_cols = [
-        "MultipleLines",
-        "InternetService",
-        "OnlineSecurity",
-        "OnlineBackup",
-        "DeviceProtection",
-        "TechSupport",
-        "StreamingTV",
-        "StreamingMovies",
-        "Contract",
-        "PaymentMethod",
-    ]
-    df_encoded = pd.get_dummies(df_clean, columns=cat_cols, drop_first=True)
+        df = pd.read_csv(dataset_path)
+        df_processed = preprocess_batch_csv(df, expected_columns, scaler)
 
-    expected_cols = list(model.feature_names_in_)
-    for col in expected_cols:
-        if col not in df_encoded.columns:
-            df_encoded[col] = 0
-    df_encoded = df_encoded[expected_cols]
+        # Predict
+        probs = model.predict_proba(df_processed)[:, 1]
+        preds = model.predict(df_processed)
 
-    numeric_cols = ["tenure", "MonthlyCharges", "TotalCharges"]
-    df_encoded[numeric_cols] = scaler.transform(df_encoded[numeric_cols])
-
-    probs = model.predict_proba(df_encoded)[:, 1]
-    preds = model.predict(df_encoded)
-
-    results = []
-    for prob, pred in zip(probs, preds):
-        results.append(
-            {
+        # Build results
+        results = []
+        for prob, pred in zip(probs, preds):
+            results.append({
                 "churn_probability": round(float(prob), 4),
                 "churn_prediction": int(pred),
                 "churn_label": "Yes" if pred == 1 else "No",
                 "risk_level": (
                     "High" if prob > 0.5 else "Medium" if prob > 0.3 else "Low"
                 ),
-            }
-        )
+            })
 
-    results_df = pd.DataFrame(results)
-    return pd.concat([df.reset_index(drop=True), results_df], axis=1)
-
-
-@app.post("/predict/batch/dataset", tags=["Predictions"])
-async def predict_batch_dataset():
-    """Predict churn for all customers in the built-in dataset."""
-    if model is None:
-        raise HTTPException(status_code=500, detail="Model not loaded")
-
-    try:
-        dataset_path = Path("/app/data/raw/WA_Fn-UseC_-Telco-Customer-Churn.csv")
-        if not dataset_path.exists():
-            raise HTTPException(status_code=404, detail="Built-in dataset not found")
-
-        df = pd.read_csv(dataset_path)
-        output_df = run_predictions(df)
+        results_df = pd.DataFrame(results)
+        output_df = pd.concat([df.reset_index(drop=True), results_df], axis=1)
 
         # Return as JSON
         records = output_df.to_dict(orient="records")
@@ -511,11 +384,11 @@ async def predict_batch_dataset():
 @app.get("/predict/customer/{customer_id}", tags=["Predictions"])
 async def get_customer_prediction(customer_id: str):
     """Get prediction details for a specific customer from the dataset."""
-    if model is None:
-        raise HTTPException(status_code=500, detail="Model not loaded")
+    if model is None or scaler is None:
+        raise HTTPException(status_code=500, detail="Model or scaler not loaded")
 
     try:
-        dataset_path = Path("/app/data/raw/WA_Fn-UseC_-Telco-Customer-Churn.csv")
+        dataset_path = Path("data/raw/WA_Fn-UseC_-Telco-Customer-Churn.csv")
         if not dataset_path.exists():
             raise HTTPException(status_code=404, detail="Built-in dataset not found")
 
@@ -527,8 +400,20 @@ async def get_customer_prediction(customer_id: str):
                 status_code=404, detail=f"Customer {customer_id} not found"
             )
 
-        output_df = run_predictions(customer_df)
-        record = output_df.iloc[0].to_dict()
+        df_processed = preprocess_batch_csv(customer_df, expected_columns, scaler)
+
+        # Predict
+        prob = model.predict_proba(df_processed)[0, 1]
+        pred = model.predict(df_processed)[0]
+
+        # Build result
+        record = customer_df.iloc[0].to_dict()
+        record["churn_probability"] = round(float(prob), 4)
+        record["churn_prediction"] = int(pred)
+        record["churn_label"] = "Yes" if pred == 1 else "No"
+        record["risk_level"] = (
+            "High" if prob > 0.5 else "Medium" if prob > 0.3 else "Low"
+        )
 
         return record
 
@@ -545,11 +430,9 @@ async def get_feature_importance():
         raise HTTPException(status_code=500, detail="Model not loaded")
 
     try:
-        # Get feature importances from RandomForest
         importances = model.feature_importances_
         feature_names = list(model.feature_names_in_)
 
-        # Create sorted list
         importance_data = [
             {"feature": name, "importance": float(imp)}
             for name, imp in zip(feature_names, importances)
@@ -558,7 +441,7 @@ async def get_feature_importance():
 
         return {
             "model": "random_forest",
-            "features": importance_data[:15],  # Top 15
+            "features": importance_data[:15],
         }
 
     except Exception as e:
@@ -569,16 +452,13 @@ async def get_feature_importance():
 async def get_churn_profile():
     """Get churn rate profiles by different dimensions."""
     try:
-        dataset_path = Path("/app/data/raw/WA_Fn-UseC_-Telco-Customer-Churn.csv")
+        dataset_path = Path("data/raw/WA_Fn-UseC_-Telco-Customer-Churn.csv")
         if not dataset_path.exists():
             raise HTTPException(status_code=404, detail="Built-in dataset not found")
 
         df = pd.read_csv(dataset_path)
-
-        # Ensure Churn is binary
         df["Churn"] = df["Churn"].map({"Yes": 1, "No": 0})
 
-        # Helper to compute churn rate
         def churn_rate(group):
             return {
                 "group": str(group.name),
@@ -587,12 +467,10 @@ async def get_churn_profile():
                 "churn_rate": round(float(group["Churn"].mean()) * 100, 1),
             }
 
-        # By Contract
         by_contract = (
             df.groupby("Contract").apply(churn_rate, include_groups=False).tolist()
         )
 
-        # By Tenure buckets
         df["tenure_bucket"] = pd.cut(
             df["tenure"],
             bins=[0, 12, 24, 48, 100],
@@ -604,12 +482,10 @@ async def get_churn_profile():
             .tolist()
         )
 
-        # By Payment Method
         by_payment = (
             df.groupby("PaymentMethod").apply(churn_rate, include_groups=False).tolist()
         )
 
-        # By Internet Service
         by_internet = (
             df.groupby("InternetService")
             .apply(churn_rate, include_groups=False)
@@ -631,43 +507,38 @@ async def get_churn_profile():
 
 @app.get("/alerts/check", tags=["Alerts"])
 async def check_alerts(threshold: float = 0.5):
-    """Check if any customers have high churn risk above threshold.
+    """Check if any customers have high churn risk above threshold."""
+    if model is None or scaler is None:
+        raise HTTPException(status_code=500, detail="Model or scaler not loaded")
 
-    Args:
-        threshold: Churn probability threshold (default 0.5)
-    """
     try:
-        dataset_path = Path("/app/data/raw/WA_Fn-UseC_-Telco-Customer-Churn.csv")
+        dataset_path = Path("data/raw/WA_Fn-UseC_-Telco-Customer-Churn.csv")
         if not dataset_path.exists():
             raise HTTPException(status_code=404, detail="Dataset not found")
 
         df = pd.read_csv(dataset_path)
+        df_processed = preprocess_batch_csv(df, expected_columns, scaler)
 
-        # Get predictions for all customers
-        output_df = run_predictions(df)
+        # Get predictions
+        probs = model.predict_proba(df_processed)[:, 1]
 
         # Filter high-risk customers
-        high_risk = output_df[output_df["churn_probability"] >= threshold]
+        high_risk_mask = probs >= threshold
+        high_risk_df = df[high_risk_mask].copy()
+        high_risk_df["churn_probability"] = probs[high_risk_mask]
 
         # Get top 10 highest risk
-        top_risk = high_risk.nlargest(10, "churn_probability")[
-            [
-                "customerID",
-                "churn_probability",
-                "churn_label",
-                "Contract",
-                "tenure",
-                "MonthlyCharges",
-            ]
+        top_risk = high_risk_df.nlargest(10, "churn_probability")[
+            ["customerID", "churn_probability", "Contract", "tenure", "MonthlyCharges"]
         ].to_dict("records")
 
         return {
             "threshold": threshold,
-            "total_customers": len(output_df),
-            "high_risk_count": len(high_risk),
-            "high_risk_percentage": round(len(high_risk) / len(output_df) * 100, 2),
+            "total_customers": len(df),
+            "high_risk_count": int(high_risk_mask.sum()),
+            "high_risk_percentage": round(float(high_risk_mask.mean()) * 100, 2),
             "top_risk_customers": top_risk,
-            "alert_triggered": len(high_risk) > 0,
+            "alert_triggered": high_risk_mask.any(),
         }
 
     except HTTPException:
@@ -682,18 +553,13 @@ async def check_data_drift():
     against baseline (training data) statistics.
     """
     try:
-        dataset_path = Path("/app/data/raw/WA_Fn-UseC_-Telco-Customer-Churn.csv")
+        dataset_path = Path("data/raw/WA_Fn-UseC_-Telco-Customer-Churn.csv")
         if not dataset_path.exists():
             raise HTTPException(status_code=404, detail="Dataset not found")
 
         df = pd.read_csv(dataset_path)
+        df["TotalCharges"] = pd.to_numeric(df["TotalCharges"], errors="coerce").fillna(0)
 
-        # Convert numeric columns
-        df["TotalCharges"] = pd.to_numeric(df["TotalCharges"], errors="coerce").fillna(
-            0
-        )
-
-        # Calculate current statistics
         numeric_cols = ["tenure", "MonthlyCharges", "TotalCharges"]
         current_stats = {}
 
@@ -705,30 +571,15 @@ async def check_data_drift():
                 "max": round(float(df[col].max()), 4),
             }
 
-        # Known baseline statistics from original dataset
         baseline_stats = {
             "tenure": {"mean": 32.37, "std": 24.56, "min": 0.0, "max": 72.0},
-            "MonthlyCharges": {
-                "mean": 64.76,
-                "std": 30.09,
-                "min": 18.25,
-                "max": 118.75,
-            },
-            "TotalCharges": {
-                "mean": 2283.30,
-                "std": 2266.77,
-                "min": 18.80,
-                "max": 8684.80,
-            },
+            "MonthlyCharges": {"mean": 64.76, "std": 30.09, "min": 18.25, "max": 118.75},
+            "TotalCharges": {"mean": 2283.30, "std": 2266.77, "min": 18.80, "max": 8684.80},
         }
 
-        # Calculate drift metrics
         drift_metrics = {}
         for col in numeric_cols:
             mean_diff = abs(current_stats[col]["mean"] - baseline_stats[col]["mean"])
-            std_diff = abs(current_stats[col]["std"] - baseline_stats[col]["std"])
-
-            # Simple drift score: normalized difference
             drift_score = mean_diff / baseline_stats[col]["std"]
 
             drift_metrics[col] = {
@@ -736,10 +587,9 @@ async def check_data_drift():
                 "baseline_mean": baseline_stats[col]["mean"],
                 "mean_difference": round(mean_diff, 4),
                 "drift_score": round(drift_score, 4),
-                "drift_detected": drift_score > 0.5,  # Threshold for drift
+                "drift_detected": drift_score > 0.5,
             }
 
-        # Overall drift status
         any_drift = any(m["drift_detected"] for m in drift_metrics.values())
 
         return {
